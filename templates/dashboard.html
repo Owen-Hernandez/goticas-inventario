@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}📊 Dashboard{% endblock %}
+
+{% block content %}
+<!-- KPIs -->
+<div class="kpi-grid">
+  <div class="kpi amber">
+    <div class="kpi-label">💰 Valor Total Inventario</div>
+    <div class="kpi-value amber" id="kpi-valor">—</div>
+    <div class="kpi-sub">Costo total del stock</div>
+  </div>
+  <div class="kpi green">
+    <div class="kpi-label">📦 Total Unidades</div>
+    <div class="kpi-value green" id="kpi-unidades">—</div>
+    <div class="kpi-sub">En stock</div>
+  </div>
+  <div class="kpi blue">
+    <div class="kpi-label">🗂️ Productos</div>
+    <div class="kpi-value blue" id="kpi-productos">—</div>
+    <div class="kpi-sub">Registrados</div>
+  </div>
+  <div class="kpi green">
+    <div class="kpi-label">📥 Entradas Mes</div>
+    <div class="kpi-value green" id="kpi-entradas">—</div>
+    <div class="kpi-sub">Unidades ingresadas</div>
+  </div>
+  <div class="kpi red">
+    <div class="kpi-label">📤 Salidas Mes</div>
+    <div class="kpi-value red" id="kpi-salidas">—</div>
+    <div class="kpi-sub">Unidades despachadas</div>
+  </div>
+</div>
+
+<!-- Fila 2: movimientos + stock bajo -->
+<div class="grid-dash" style="margin-bottom:12px">
+  <div class="card">
+    <div class="card-title">🕐 Últimos Movimientos</div>
+    <div class="mov-list" id="mov-list"><div class="text-muted text-sm">Cargando...</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">⚠️ Stock Bajo (&lt;100 UND)</div>
+    <div id="stock-bajo-list" style="display:flex;flex-direction:column;gap:8px">
+      <div class="text-muted text-sm">Cargando...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla resumen -->
+<div class="card">
+  <div class="card-title">📋 Resumen de Inventario</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Referencia</th>
+          <th>Producto</th>
+          <th>Stock Actual</th>
+          <th>Costo Unitario</th>
+          <th>Valor Inventario</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody id="tabla-inventario">
+        <tr><td colspan="6" class="text-muted">Cargando...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function cargarDashboard() {
+  const res = await fetch('/api/dashboard');
+  const d = await res.json();
+
+  document.getElementById('kpi-valor').textContent = formatCOP(d.valor_total_inventario);
+  document.getElementById('kpi-unidades').textContent = Number(d.total_unidades).toLocaleString('es-CO') + ' UND';
+  document.getElementById('kpi-productos').textContent = d.total_productos;
+  document.getElementById('kpi-entradas').textContent = Number(d.entradas_mes).toLocaleString('es-CO') + ' UND';
+  document.getElementById('kpi-salidas').textContent = Number(d.salidas_mes).toLocaleString('es-CO') + ' UND';
+
+  const movList = document.getElementById('mov-list');
+  if (!d.ultimos_movimientos.length) {
+    movList.innerHTML = '<div class="text-muted text-sm">Sin movimientos</div>';
+  } else {
+    const icons = { entrada:'📥', salida:'📤', ajuste:'⚖️' };
+    const colors = { entrada:'text-green', salida:'text-red', ajuste:'text-accent' };
+    movList.innerHTML = d.ultimos_movimientos.map(m => {
+      const sign = m.tipo==='entrada'?'+':m.tipo==='salida'?'-':'~';
+      return `<div class="mov-item">
+        <span class="mov-icon">${icons[m.tipo]}</span>
+        <div class="mov-info">
+          <div class="mov-name">${m.producto_nombre}</div>
+          <div class="mov-date">${m.fecha} · ${m.tipo.toUpperCase()}</div>
+        </div>
+        <span class="mov-qty ${colors[m.tipo]}">${sign}${Math.abs(m.cantidad)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  const sbl = document.getElementById('stock-bajo-list');
+  if (!d.stock_bajo.length) {
+    sbl.innerHTML = '<div class="text-muted text-sm">✅ Todos con stock adecuado</div>';
+  } else {
+    sbl.innerHTML = d.stock_bajo.map(p => `
+      <div>
+        <div class="flex-between" style="margin-bottom:3px">
+          <span class="text-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${p.nombre}</span>
+          <span class="text-red fw-bold text-sm">${p.stock} UND</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.min(p.stock,100)}%;background:var(--red)"></div></div>
+      </div>`).join('');
+  }
+
+  const tbody = document.getElementById('tabla-inventario');
+  tbody.innerHTML = d.productos.map(p => {
+    const valor = p.stock * p.costo;
+    const estado = p.stock === 0
+      ? '<span class="badge badge-red">Sin stock</span>'
+      : p.stock < 100
+      ? '<span class="badge badge-amber">Stock bajo</span>'
+      : '<span class="badge badge-green">OK</span>';
+    return `<tr>
+      <td><span class="mono">${p.referencia}</span></td>
+      <td class="fw-bold">${p.nombre}</td>
+      <td>${Number(p.stock).toLocaleString('es-CO')} UND</td>
+      <td>${formatCOP(p.costo)}</td>
+      <td class="text-accent fw-bold">${formatCOP(valor)}</td>
+      <td>${estado}</td>
+    </tr>`;
+  }).join('');
+}
+cargarDashboard();
+</script>
+{% endblock %}

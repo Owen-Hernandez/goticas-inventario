@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Productos{% endblock %}
+{% block page_title %}📦 Productos{% endblock %}
+
+{% block content %}
+<div class="grid-form">
+
+  <div class="flex-col" style="gap:12px">
+    <!-- Crear producto -->
+    <div class="card">
+      <div class="card-title">➕ Crear Nuevo Producto</div>
+      <div class="form-col">
+        <div class="form-group">
+          <label>Referencia</label>
+          <input type="text" id="referencia" placeholder="Ej: OLE_PAL_BID_001" style="text-transform:uppercase">
+        </div>
+        <div class="form-group">
+          <label>Nombre del Producto</label>
+          <input type="text" id="nombre" placeholder="Ej: Oleína de Palma Bidón 20 L">
+        </div>
+        <div class="form-group">
+          <label>Costo Unitario ($)</label>
+          <input type="number" id="costo" min="0" placeholder="0">
+          <span class="form-hint">Sin puntos ni comas. Ej: 45000</span>
+        </div>
+        <div class="form-group">
+          <label>Saldo Inicial (UND)</label>
+          <input type="number" id="saldo-inicial" min="0" placeholder="0" value="0">
+        </div>
+        <button class="btn btn-primary btn-full" onclick="crearProducto()">📦 Crear Producto</button>
+      </div>
+    </div>
+
+    <!-- Editar producto -->
+    <div class="card">
+      <div class="card-title">✏️ Editar Producto</div>
+      <div class="form-col">
+        <div class="form-group">
+          <label>Seleccionar Producto</label>
+          <select id="sel-editar"><option value="">— Seleccionar —</option></select>
+        </div>
+        <div class="form-group">
+          <label>Nuevo Nombre</label>
+          <input type="text" id="edit-nombre" placeholder="Nombre del producto">
+        </div>
+        <div class="form-group">
+          <label>Nuevo Costo ($)</label>
+          <input type="number" id="edit-costo" min="0" placeholder="0">
+          <span class="form-hint">Sin puntos ni comas. Ej: 87500</span>
+        </div>
+        <button class="btn btn-ghost btn-full" onclick="editarProducto()">💾 Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla de productos -->
+  <div class="card">
+    <div class="card-title">📋 Productos Registrados</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Referencia</th>
+            <th>Nombre</th>
+            <th>Stock</th>
+            <th>Costo Unit.</th>
+            <th>Valor Total</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-productos">
+          <tr><td colspan="5" class="text-muted">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function cargarProductos() {
+  const res = await fetch('/api/productos');
+  const productos = await res.json();
+
+  const tbody = document.getElementById('tabla-productos');
+  tbody.innerHTML = productos.map(p => `<tr>
+    <td><span class="mono">${p.referencia}</span></td>
+    <td class="fw-bold">${p.nombre}</td>
+    <td>${Number(p.stock).toLocaleString('es-CO')} UND</td>
+    <td>${formatCOP(p.costo)}</td>
+    <td class="text-accent">${formatCOP(p.stock * p.costo)}</td>
+  </tr>`).join('');
+
+  const sel = document.getElementById('sel-editar');
+  sel.innerHTML = '<option value="">— Seleccionar —</option>' +
+    productos.map(p => `<option value="${p.id}" data-nombre="${p.nombre}" data-costo="${p.costo}">${p.nombre}</option>`).join('');
+}
+
+document.getElementById('sel-editar').addEventListener('change', function() {
+  const opt = this.selectedOptions[0];
+  document.getElementById('edit-nombre').value = opt.dataset.nombre || '';
+  document.getElementById('edit-costo').value = opt.dataset.costo || '';
+});
+
+document.getElementById('referencia').addEventListener('input', function() {
+  this.value = this.value.toUpperCase().replace(/\s/g, '_');
+});
+
+async function crearProducto() {
+  const referencia = document.getElementById('referencia').value.trim();
+  const nombre = document.getElementById('nombre').value.trim();
+  const costo = parseFloat(document.getElementById('costo').value) || 0;
+  const saldo_inicial = parseFloat(document.getElementById('saldo-inicial').value) || 0;
+
+  if (!referencia || !nombre) { showAlert('Referencia y nombre son obligatorios', 'error'); return; }
+
+  const res = await fetch('/api/productos', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ referencia, nombre, costo, saldo_inicial })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    showAlert(data.mensaje);
+    document.getElementById('referencia').value = '';
+    document.getElementById('nombre').value = '';
+    document.getElementById('costo').value = '';
+    document.getElementById('saldo-inicial').value = '0';
+    cargarProductos();
+  } else { showAlert(data.error, 'error'); }
+}
+
+async function editarProducto() {
+  const pid = document.getElementById('sel-editar').value;
+  const nombre = document.getElementById('edit-nombre').value.trim();
+  const costo = parseFloat(document.getElementById('edit-costo').value) || 0;
+
+  if (!pid) { showAlert('Selecciona un producto', 'error'); return; }
+  if (!nombre) { showAlert('El nombre no puede estar vacío', 'error'); return; }
+
+  const res = await fetch(`/api/productos/${pid}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ nombre, costo })
+  });
+  const data = await res.json();
+  if (res.ok) { showAlert(data.mensaje); cargarProductos(); }
+  else { showAlert(data.error, 'error'); }
+}
+
+cargarProductos();
+</script>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Entradas{% endblock %}
+{% block page_title %}📥 Entradas{% endblock %}
+
+{% block content %}
+<div class="grid-form">
+
+  <div class="card">
+    <div class="card-title">➕ Registrar Entrada</div>
+    <div class="form-col">
+      <div class="form-group">
+        <label>Producto</label>
+        <select id="sel-producto">
+          <option value="">— Seleccionar —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Stock Actual</label>
+        <input type="text" id="stock-actual" readonly placeholder="—" style="color:var(--muted)">
+      </div>
+      <div class="form-group">
+        <label>Cantidad (UND)</label>
+        <input type="number" id="cantidad" min="1" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>Costo Unitario</label>
+        <input type="number" id="costo-unitario" min="0" placeholder="0">
+        <span class="form-hint">Ingrese el valor sin puntos. Ej: 13500</span>
+      </div>
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="fecha">
+      </div>
+      <div class="form-group">
+        <label>Observación (opcional)</label>
+        <input type="text" id="observacion" placeholder="Ej: Compra proveedor X">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="registrarEntrada()">📥 Registrar Entrada</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🕐 Historial de Entradas</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Producto</th>
+            <th>Cantidad</th>
+            <th>Costo Unit.</th>
+            <th>Valor Total</th>
+            <th>Observación</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-entradas">
+          <tr><td colspan="6" class="text-muted">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function cargarProductos() {
+  const res = await fetch('/api/productos');
+  const productos = await res.json();
+  const sel = document.getElementById('sel-producto');
+  sel.innerHTML = '<option value="">— Seleccionar —</option>' +
+    productos.map(p => `<option value="${p.id}" data-stock="${p.stock}" data-costo="${p.costo}">${p.nombre} (${p.referencia})</option>`).join('');
+}
+
+async function cargarEntradas() {
+  const res = await fetch('/api/entradas');
+  const data = await res.json();
+  const tbody = document.getElementById('tabla-entradas');
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Sin registros</td></tr>'; return; }
+  tbody.innerHTML = data.map(m => `<tr>
+    <td>${m.fecha}</td>
+    <td>${m.producto_nombre}<div class="td-sub mono">${m.referencia}</div></td>
+    <td class="text-green fw-bold">+${m.cantidad} UND</td>
+    <td>${formatCOP(m.costo_unitario)}</td>
+    <td class="text-accent">${formatCOP(m.cantidad * m.costo_unitario)}</td>
+    <td class="text-muted">${m.observacion || '—'}</td>
+  </tr>`).join('');
+}
+
+document.getElementById('sel-producto').addEventListener('change', function() {
+  const opt = this.selectedOptions[0];
+  document.getElementById('stock-actual').value = opt.dataset.stock !== undefined && opt.value ? opt.dataset.stock + ' UND' : '—';
+  document.getElementById('costo-unitario').value = opt.dataset.costo || '';
+});
+
+document.getElementById('fecha').value = new Date().toISOString().split('T')[0];
+
+async function registrarEntrada() {
+  const pid = document.getElementById('sel-producto').value;
+  const cantidad = parseFloat(document.getElementById('cantidad').value);
+  const costo = parseFloat(document.getElementById('costo-unitario').value) || 0;
+  const fecha = document.getElementById('fecha').value;
+  const obs = document.getElementById('observacion').value;
+
+  if (!pid || !cantidad || cantidad <= 0) { showAlert('Selecciona un producto y una cantidad válida', 'error'); return; }
+  if (!fecha) { showAlert('Selecciona una fecha', 'error'); return; }
+
+  const res = await fetch('/api/entradas', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ producto_id: pid, cantidad, costo_unitario: costo, fecha, observacion: obs })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    showAlert(data.mensaje);
+    document.getElementById('cantidad').value = '';
+    document.getElementById('observacion').value = '';
+    cargarProductos(); cargarEntradas();
+  } else { showAlert(data.error, 'error'); }
+}
+
+cargarProductos(); cargarEntradas();
+</script>
+{% endblock %}
