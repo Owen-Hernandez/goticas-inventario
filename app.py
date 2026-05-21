@@ -6,9 +6,8 @@ app = Flask(__name__)
 # ──────────────────────────────────────────────
 # INICIALIZACIÓN
 # ──────────────────────────────────────────────
-@app.before_request
-def setup():
-    pass  # La BD se inicializa al importar database
+# Inicializar BD al arrancar (funciona con python app.py y gunicorn)
+init_db()
 
 # ──────────────────────────────────────────────
 # PÁGINAS
