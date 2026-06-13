@@ -1,33 +1,38 @@
 {% extends "base.html" %}
 {% block title %}Costos{% endblock %}
-{% block page_title %}💰 Costos{% endblock %}
+{% block page_title %}Costos{% endblock %}
 
 {% block content %}
-
-<!-- KPIs -->
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
-  <div class="kpi amber">
-    <div class="kpi-label">💰 Valor Total Inventario</div>
-    <div class="kpi-value amber" id="kpi-total">—</div>
+<div class="grid-3kpi">
+  <div class="kpi cyan">
+    <div class="kpi-icon">💰</div>
+    <div class="kpi-label">Valor Total Inventario</div>
+    <div class="kpi-value cyan" id="kpi-total">—</div>
     <div class="kpi-sub">Suma costo × stock</div>
   </div>
-  <div class="kpi blue">
-    <div class="kpi-label">📊 Costo Promedio Unit.</div>
-    <div class="kpi-value blue" id="kpi-promedio">—</div>
+  <div class="kpi purple">
+    <div class="kpi-icon">◈</div>
+    <div class="kpi-label">Costo Promedio Unit.</div>
+    <div class="kpi-value purple" id="kpi-promedio">—</div>
     <div class="kpi-sub">Promedio entre productos</div>
   </div>
   <div class="kpi green">
-    <div class="kpi-label">🏆 Mayor Valor</div>
-    <div class="kpi-value green text-sm" id="kpi-mayor-nombre" style="font-size:0.82rem;white-space:normal;line-height:1.3">—</div>
+    <div class="kpi-icon">🏆</div>
+    <div class="kpi-label">Mayor Valor en Inventario</div>
+    <div class="kpi-value green text-sm" id="kpi-mayor-nombre" style="font-size:0.8rem;white-space:normal;line-height:1.3">—</div>
     <div class="kpi-sub" id="kpi-mayor-valor">—</div>
   </div>
 </div>
 
 <div class="grid-cost">
-
-  <!-- Tabla costos -->
   <div class="card">
-    <div class="card-title">📊 Costos por Producto</div>
+    <div class="flex-between" style="margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:0">Costos por Producto</div>
+      <button class="btn-export" onclick="exportarCostos()">↓ CSV</button>
+    </div>
+    <div class="filter-bar">
+      <input class="search-input" type="text" id="search" placeholder="Buscar producto...">
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -47,10 +52,9 @@
     </div>
   </div>
 
-  <!-- Panel derecho -->
-  <div class="flex-col" style="gap:12px">
+  <div class="flex-col gap-3">
     <div class="card">
-      <div class="card-title">✏️ Actualizar Costo</div>
+      <div class="card-title">Actualizar Costo</div>
       <div class="form-col">
         <div class="form-group">
           <label>Producto</label>
@@ -58,35 +62,37 @@
         </div>
         <div class="form-group">
           <label>Costo Actual</label>
-          <input type="text" id="costo-actual" readonly style="color:var(--muted)">
+          <input type="text" id="costo-actual" readonly style="color:var(--text3)">
         </div>
         <div class="form-group">
           <label>Nuevo Costo ($)</label>
           <input type="number" id="nuevo-costo" min="0" placeholder="0">
-          <span class="form-hint">Sin puntos ni comas. Ej: 87500</span>
+          <span class="form-hint">Sin puntos. Ej: 87500</span>
         </div>
         <button class="btn btn-primary btn-full" onclick="actualizarCosto()">💾 Actualizar</button>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">🥧 Distribución</div>
-      <div id="distribucion" style="display:flex;flex-direction:column;gap:7px"></div>
+      <div class="card-title">Distribución</div>
+      <div id="distribucion" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
   </div>
-
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+let _costos = [];
+const COLORES = ['var(--cyan)','var(--green)','var(--amber)','var(--red)','var(--purple)','#f472b6'];
+
 async function cargarCostos() {
   const res = await fetch('/api/costos');
-  const productos = await res.json();
+  _costos = await res.json();
 
-  const total = productos.reduce((s, p) => s + p.valor_total, 0);
-  const promedio = productos.length ? productos.reduce((s,p) => s + p.costo, 0) / productos.length : 0;
-  const mayor = [...productos].sort((a,b) => b.valor_total - a.valor_total)[0];
+  const total = _costos.reduce((s, p) => s + p.valor_total, 0);
+  const promedio = _costos.length ? _costos.reduce((s,p) => s + p.costo, 0) / _costos.length : 0;
+  const mayor = [..._costos].sort((a,b) => b.valor_total - a.valor_total)[0];
 
   document.getElementById('kpi-total').textContent = formatCOP(total);
   document.getElementById('kpi-promedio').textContent = formatCOP(Math.round(promedio));
@@ -95,43 +101,54 @@ async function cargarCostos() {
     document.getElementById('kpi-mayor-valor').textContent = formatCOP(mayor.valor_total);
   }
 
-  const sorted = [...productos].sort((a,b) => b.valor_total - a.valor_total);
+  const sel = document.getElementById('sel-producto');
+  sel.innerHTML = '<option value="">— Seleccionar —</option>' +
+    _costos.map(p => `<option value="${p.id}" data-costo="${p.costo}">${p.nombre}</option>`).join('');
 
+  const sorted = [..._costos].sort((a,b) => b.valor_total - a.valor_total);
+  const dist = document.getElementById('distribucion');
+  dist.innerHTML = sorted.map((p,i) => {
+    const pct = total > 0 ? ((p.valor_total/total)*100).toFixed(1) : 0;
+    return `<div>
+      <div class="flex-between" style="margin-bottom:4px">
+        <span class="text-sm" style="color:${COLORES[i%COLORES.length]};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${p.nombre}</span>
+        <span class="fw-bold text-sm">${pct}%</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${COLORES[i%COLORES.length]}"></div></div>
+    </div>`;
+  }).join('');
+
+  renderTabla(total, sorted);
+}
+
+function renderTabla(total, sorted) {
+  const q = document.getElementById('search').value.toLowerCase();
   const tbody = document.getElementById('tabla-costos');
-  tbody.innerHTML = sorted.map(p => {
-    const pct = total > 0 ? ((p.valor_total / total) * 100).toFixed(1) : 0;
+  const filtrado = sorted.filter(p => !q || p.nombre.toLowerCase().includes(q) || p.referencia.toLowerCase().includes(q));
+  if (!filtrado.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Sin resultados</td></tr>'; return; }
+  tbody.innerHTML = filtrado.map((p,i) => {
+    const pct = total > 0 ? ((p.valor_total/total)*100).toFixed(1) : 0;
     return `<tr>
       <td class="fw-bold">${p.nombre}</td>
       <td><span class="mono">${p.referencia}</span></td>
       <td>${Number(p.stock).toLocaleString('es-CO')} UND</td>
-      <td class="text-accent">${formatCOP(p.costo)}</td>
-      <td class="fw-bold">${formatCOP(p.valor_total)}</td>
+      <td class="text-amber">${formatCOP(p.costo)}</td>
+      <td class="fw-bold text-cyan">${formatCOP(p.valor_total)}</td>
       <td>
-        <div class="flex-center" style="gap:6px">
-          <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:var(--accent)"></div></div>
-          <span class="text-muted text-sm" style="min-width:32px">${pct}%</span>
+        <div class="flex-center" style="gap:7px">
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${COLORES[i%COLORES.length]}"></div></div>
+          <span class="text-muted text-sm" style="min-width:34px">${pct}%</span>
         </div>
       </td>
     </tr>`;
   }).join('');
-
-  const sel = document.getElementById('sel-producto');
-  sel.innerHTML = '<option value="">— Seleccionar —</option>' +
-    productos.map(p => `<option value="${p.id}" data-costo="${p.costo}">${p.nombre}</option>`).join('');
-
-  const colores = ['var(--accent)','var(--green)','var(--blue)','var(--red)','#a78bfa','#f472b6'];
-  const dist = document.getElementById('distribucion');
-  dist.innerHTML = sorted.map((p, i) => {
-    const pct = total > 0 ? ((p.valor_total / total) * 100).toFixed(1) : 0;
-    return `<div>
-      <div class="flex-between" style="margin-bottom:3px">
-        <span class="text-sm" style="color:${colores[i%colores.length]};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${p.nombre}</span>
-        <span class="fw-bold text-sm">${pct}%</span>
-      </div>
-      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${colores[i%colores.length]}"></div></div>
-    </div>`;
-  }).join('');
 }
+
+document.getElementById('search').addEventListener('input', () => {
+  const total = _costos.reduce((s,p) => s + p.valor_total, 0);
+  const sorted = [..._costos].sort((a,b) => b.valor_total - a.valor_total);
+  renderTabla(total, sorted);
+});
 
 document.getElementById('sel-producto').addEventListener('change', function() {
   const opt = this.selectedOptions[0];
@@ -146,13 +163,18 @@ async function actualizarCosto() {
   if (isNaN(nuevoCosto) || nuevoCosto < 0) { showAlert('Ingresa un costo válido', 'error'); return; }
 
   const res = await fetch(`/api/costos/${pid}`, {
-    method: 'PUT',
-    headers: {'Content-Type':'application/json'},
+    method: 'PUT', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ costo: nuevoCosto })
   });
   const data = await res.json();
   if (res.ok) { showAlert(data.mensaje); cargarCostos(); }
   else { showAlert(data.error, 'error'); }
+}
+
+function exportarCostos() {
+  const rows = _costos.map(p => ({ referencia: p.referencia, nombre: p.nombre, stock: p.stock, costo_unitario: p.costo, valor_total: p.valor_total }));
+  exportCSV(rows, ['referencia','nombre','stock','costo_unitario','valor_total'], 'costos');
+  showAlert('Exportación completada');
 }
 
 cargarCostos();

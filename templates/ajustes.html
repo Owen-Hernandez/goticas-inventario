@@ -1,46 +1,49 @@
 {% extends "base.html" %}
 {% block title %}Ajustes{% endblock %}
-{% block page_title %}⚖️ Ajustes{% endblock %}
+{% block page_title %}Ajustes{% endblock %}
 
 {% block content %}
 <div class="grid-form">
-
   <div class="card">
-    <div class="card-title">✏️ Registrar Ajuste</div>
-    <p class="text-muted text-sm" style="margin-bottom:10px">Corrige el stock cuando hay diferencias por conteo físico, mermas o errores de registro.</p>
+    <div class="card-title">Registrar Ajuste</div>
+    <p class="text-2 text-sm" style="margin-bottom:12px;line-height:1.6">Corrige el stock cuando hay diferencias entre el sistema y el conteo físico.</p>
     <div class="form-col">
       <div class="form-group">
         <label>Producto</label>
-        <select id="sel-producto">
-          <option value="">— Seleccionar —</option>
-        </select>
+        <select id="sel-producto"><option value="">— Seleccionar —</option></select>
       </div>
       <div class="form-group">
         <label>Stock Actual en Sistema</label>
-        <input type="text" id="stock-sistema" readonly placeholder="—" style="color:var(--muted)">
+        <input type="text" id="stock-sistema" readonly placeholder="—" style="color:var(--text3)">
       </div>
       <div class="form-group">
         <label>Nuevo Stock Real (UND)</label>
         <input type="number" id="cantidad-nueva" min="0" placeholder="0">
       </div>
-      <div class="form-group" id="diferencia-box" style="display:none">
-        <label>Diferencia</label>
-        <input type="text" id="diferencia-val" readonly>
+      <div id="diferencia-box" style="display:none;padding:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm)">
+        <div class="text-muted text-sm" style="margin-bottom:6px">Diferencia a aplicar</div>
+        <div id="diferencia-chip"></div>
       </div>
       <div class="form-group">
-        <label>Fecha del Ajuste</label>
+        <label>Fecha</label>
         <input type="date" id="fecha">
       </div>
       <div class="form-group">
         <label>Motivo del Ajuste</label>
         <input type="text" id="observacion" placeholder="Ej: Conteo físico, merma, error previo…">
       </div>
-      <button class="btn btn-primary btn-full" onclick="registrarAjuste()">⚖️ Aplicar Ajuste</button>
+      <button class="btn btn-primary btn-full" onclick="confirmarAjuste()">⇄ Aplicar Ajuste</button>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-title">🕐 Historial de Ajustes</div>
+    <div class="flex-between" style="margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:0">Historial de Ajustes</div>
+      <button class="btn-export" onclick="exportarAjustes()">↓ CSV</button>
+    </div>
+    <div class="filter-bar">
+      <input class="search-input" type="text" id="search" placeholder="Buscar producto...">
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -57,13 +60,13 @@
       </table>
     </div>
   </div>
-
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-let stockActual = 0;
+let _ajustes = [];
+let _stockActual = 0;
 
 async function cargarProductos() {
   const res = await fetch('/api/productos');
@@ -75,25 +78,37 @@ async function cargarProductos() {
 
 async function cargarAjustes() {
   const res = await fetch('/api/ajustes');
-  const data = await res.json();
+  _ajustes = await res.json();
+  renderTabla();
+}
+
+function renderTabla() {
+  const q = document.getElementById('search').value.toLowerCase();
   const tbody = document.getElementById('tabla-ajustes');
-  if (!data.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Sin ajustes registrados</td></tr>'; return; }
-  tbody.innerHTML = data.map(m => {
+  const filtrado = _ajustes.filter(m => !q || m.producto_nombre.toLowerCase().includes(q) || m.referencia.toLowerCase().includes(q));
+  if (!filtrado.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Sin ajustes registrados</td></tr>'; return; }
+  tbody.innerHTML = filtrado.map(m => {
     const dif = m.cantidad;
-    const cls = dif > 0 ? 'text-green' : dif < 0 ? 'text-red' : 'text-muted';
+    const chip = dif > 0
+      ? `<span class="diff-chip pos">+${dif} UND</span>`
+      : dif < 0
+      ? `<span class="diff-chip neg">${dif} UND</span>`
+      : `<span class="diff-chip neu">0 UND</span>`;
     return `<tr>
-      <td>${m.fecha}</td>
+      <td><span class="mono">${m.fecha}</span></td>
       <td>${m.producto_nombre}<div class="td-sub mono">${m.referencia}</div></td>
-      <td class="${cls} fw-bold">${dif > 0 ? '+' : ''}${dif} UND</td>
-      <td class="text-muted">${m.observacion || '—'}</td>
+      <td>${chip}</td>
+      <td class="text-2">${m.observacion || '—'}</td>
     </tr>`;
   }).join('');
 }
 
+document.getElementById('search').addEventListener('input', renderTabla);
+
 document.getElementById('sel-producto').addEventListener('change', function() {
   const opt = this.selectedOptions[0];
-  stockActual = parseFloat(opt.dataset.stock) || 0;
-  document.getElementById('stock-sistema').value = opt.value ? stockActual + ' UND' : '—';
+  _stockActual = parseFloat(opt.dataset.stock) || 0;
+  document.getElementById('stock-sistema').value = opt.value ? _stockActual + ' UND' : '—';
   calcularDiferencia();
 });
 
@@ -102,31 +117,41 @@ document.getElementById('cantidad-nueva').addEventListener('input', calcularDife
 function calcularDiferencia() {
   const nueva = parseFloat(document.getElementById('cantidad-nueva').value);
   const box = document.getElementById('diferencia-box');
-  const inp = document.getElementById('diferencia-val');
   if (!isNaN(nueva) && document.getElementById('sel-producto').value) {
-    const dif = nueva - stockActual;
-    box.style.display = 'flex';
-    inp.value = (dif >= 0 ? '+' : '') + dif + ' UND';
-    inp.style.color = dif > 0 ? 'var(--green)' : dif < 0 ? 'var(--red)' : 'var(--muted)';
+    const dif = nueva - _stockActual;
+    box.style.display = 'block';
+    const chip = document.getElementById('diferencia-chip');
+    if (dif > 0) chip.innerHTML = `<span class="diff-chip pos">+${dif} UND</span>`;
+    else if (dif < 0) chip.innerHTML = `<span class="diff-chip neg">${dif} UND</span>`;
+    else chip.innerHTML = `<span class="diff-chip neu">Sin cambio</span>`;
   } else { box.style.display = 'none'; }
 }
 
 document.getElementById('fecha').value = new Date().toISOString().split('T')[0];
 
-async function registrarAjuste() {
+function confirmarAjuste() {
   const pid = document.getElementById('sel-producto').value;
   const nueva = parseFloat(document.getElementById('cantidad-nueva').value);
   const fecha = document.getElementById('fecha').value;
   const obs = document.getElementById('observacion').value;
+  const nombre = document.getElementById('sel-producto').selectedOptions[0]?.text?.split('(')[0]?.trim() || '';
 
   if (!pid) { showAlert('Selecciona un producto', 'error'); return; }
   if (isNaN(nueva) || nueva < 0) { showAlert('Ingresa un stock válido (≥ 0)', 'error'); return; }
-  if (nueva === stockActual) { showAlert('El nuevo stock es igual al actual', 'error'); return; }
+  if (nueva === _stockActual) { showAlert('El nuevo stock es igual al actual', 'error'); return; }
   if (!obs.trim()) { showAlert('Ingresa el motivo del ajuste', 'error'); return; }
 
+  const dif = nueva - _stockActual;
+  showConfirm(
+    'Confirmar Ajuste',
+    `Ajustar <strong>${nombre}</strong><br>Stock actual: <strong>${_stockActual} UND</strong> → Nuevo stock: <strong>${nueva} UND</strong><br>Diferencia: <strong>${dif > 0 ? '+' : ''}${dif} UND</strong>`,
+    () => registrarAjuste(pid, nueva, fecha, obs)
+  );
+}
+
+async function registrarAjuste(pid, nueva, fecha, obs) {
   const res = await fetch('/api/ajustes', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ producto_id: pid, cantidad_nueva: nueva, fecha, observacion: obs })
   });
   const data = await res.json();
@@ -137,6 +162,11 @@ async function registrarAjuste() {
     document.getElementById('diferencia-box').style.display = 'none';
     cargarProductos(); cargarAjustes();
   } else { showAlert(data.error, 'error'); }
+}
+
+function exportarAjustes() {
+  exportCSV(_ajustes, ['fecha','producto_nombre','referencia','cantidad','observacion'], 'ajustes');
+  showAlert('Exportación completada');
 }
 
 cargarProductos(); cargarAjustes();

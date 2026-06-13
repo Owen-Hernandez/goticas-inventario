@@ -1,54 +1,59 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
-{% block page_title %}📊 Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
-<!-- KPIs -->
 <div class="kpi-grid">
-  <div class="kpi amber">
-    <div class="kpi-label">💰 Valor Total Inventario</div>
-    <div class="kpi-value amber" id="kpi-valor">—</div>
+  <div class="kpi cyan">
+    <div class="kpi-icon">💰</div>
+    <div class="kpi-label">Valor Total Inventario</div>
+    <div class="kpi-value cyan" id="kpi-valor">—</div>
     <div class="kpi-sub">Costo total del stock</div>
   </div>
   <div class="kpi green">
-    <div class="kpi-label">📦 Total Unidades</div>
+    <div class="kpi-icon">📦</div>
+    <div class="kpi-label">Total Unidades</div>
     <div class="kpi-value green" id="kpi-unidades">—</div>
     <div class="kpi-sub">En stock</div>
   </div>
-  <div class="kpi blue">
-    <div class="kpi-label">🗂️ Productos</div>
-    <div class="kpi-value blue" id="kpi-productos">—</div>
+  <div class="kpi purple">
+    <div class="kpi-icon">▣</div>
+    <div class="kpi-label">Productos</div>
+    <div class="kpi-value purple" id="kpi-productos">—</div>
     <div class="kpi-sub">Registrados</div>
   </div>
   <div class="kpi green">
-    <div class="kpi-label">📥 Entradas Mes</div>
+    <div class="kpi-icon">↓</div>
+    <div class="kpi-label">Entradas del Mes</div>
     <div class="kpi-value green" id="kpi-entradas">—</div>
     <div class="kpi-sub">Unidades ingresadas</div>
   </div>
   <div class="kpi red">
-    <div class="kpi-label">📤 Salidas Mes</div>
+    <div class="kpi-icon">↑</div>
+    <div class="kpi-label">Salidas del Mes</div>
     <div class="kpi-value red" id="kpi-salidas">—</div>
     <div class="kpi-sub">Unidades despachadas</div>
   </div>
 </div>
 
-<!-- Fila 2: movimientos + stock bajo -->
-<div class="grid-dash" style="margin-bottom:12px">
+<div class="grid-dash" style="margin-bottom:14px">
   <div class="card">
-    <div class="card-title">🕐 Últimos Movimientos</div>
+    <div class="card-title">Últimos Movimientos</div>
     <div class="mov-list" id="mov-list"><div class="text-muted text-sm">Cargando...</div></div>
   </div>
   <div class="card">
-    <div class="card-title">⚠️ Stock Bajo (&lt;100 UND)</div>
-    <div id="stock-bajo-list" style="display:flex;flex-direction:column;gap:8px">
+    <div class="card-title">Stock Bajo <span class="badge badge-red" style="margin-left:4px">&lt;100 UND</span></div>
+    <div id="stock-bajo-list" style="display:flex;flex-direction:column;gap:9px">
       <div class="text-muted text-sm">Cargando...</div>
     </div>
   </div>
 </div>
 
-<!-- Tabla resumen -->
 <div class="card">
-  <div class="card-title">📋 Resumen de Inventario</div>
+  <div class="flex-between" style="margin-bottom:14px">
+    <div class="card-title" style="margin-bottom:0">Resumen de Inventario</div>
+    <button class="btn-export" onclick="exportarInventario()">↓ Exportar CSV</button>
+  </div>
   <div class="table-wrap">
     <table>
       <thead>
@@ -71,9 +76,12 @@
 
 {% block scripts %}
 <script>
+let _dashData = null;
+
 async function cargarDashboard() {
   const res = await fetch('/api/dashboard');
-  const d = await res.json();
+  _dashData = await res.json();
+  const d = _dashData;
 
   document.getElementById('kpi-valor').textContent = formatCOP(d.valor_total_inventario);
   document.getElementById('kpi-unidades').textContent = Number(d.total_unidades).toLocaleString('es-CO') + ' UND';
@@ -83,31 +91,32 @@ async function cargarDashboard() {
 
   const movList = document.getElementById('mov-list');
   if (!d.ultimos_movimientos.length) {
-    movList.innerHTML = '<div class="text-muted text-sm">Sin movimientos</div>';
+    movList.innerHTML = '<div class="text-muted text-sm">Sin movimientos registrados</div>';
   } else {
-    const icons = { entrada:'📥', salida:'📤', ajuste:'⚖️' };
-    const colors = { entrada:'text-green', salida:'text-red', ajuste:'text-accent' };
+    const icons = { entrada:'↓', salida:'↑', ajuste:'⇄' };
+    const cls   = { entrada:'entrada', salida:'salida', ajuste:'ajuste' };
+    const color = { entrada:'text-green', salida:'text-red', ajuste:'text-amber' };
     movList.innerHTML = d.ultimos_movimientos.map(m => {
       const sign = m.tipo==='entrada'?'+':m.tipo==='salida'?'-':'~';
       return `<div class="mov-item">
-        <span class="mov-icon">${icons[m.tipo]}</span>
+        <div class="mov-badge ${cls[m.tipo]}">${icons[m.tipo]}</div>
         <div class="mov-info">
           <div class="mov-name">${m.producto_nombre}</div>
-          <div class="mov-date">${m.fecha} · ${m.tipo.toUpperCase()}</div>
+          <div class="mov-meta">${m.fecha} · ${m.tipo.toUpperCase()}</div>
         </div>
-        <span class="mov-qty ${colors[m.tipo]}">${sign}${Math.abs(m.cantidad)}</span>
+        <span class="mov-qty ${color[m.tipo]}">${sign}${Math.abs(m.cantidad)}</span>
       </div>`;
     }).join('');
   }
 
   const sbl = document.getElementById('stock-bajo-list');
   if (!d.stock_bajo.length) {
-    sbl.innerHTML = '<div class="text-muted text-sm">✅ Todos con stock adecuado</div>';
+    sbl.innerHTML = '<div class="text-muted text-sm">✓ Todos los productos con stock adecuado</div>';
   } else {
     sbl.innerHTML = d.stock_bajo.map(p => `
       <div>
-        <div class="flex-between" style="margin-bottom:3px">
-          <span class="text-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${p.nombre}</span>
+        <div class="flex-between" style="margin-bottom:4px">
+          <span class="text-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;color:var(--text2)">${p.nombre}</span>
           <span class="text-red fw-bold text-sm">${p.stock} UND</span>
         </div>
         <div class="bar-track"><div class="bar-fill" style="width:${Math.min(p.stock,100)}%;background:var(--red)"></div></div>
@@ -127,11 +136,25 @@ async function cargarDashboard() {
       <td class="fw-bold">${p.nombre}</td>
       <td>${Number(p.stock).toLocaleString('es-CO')} UND</td>
       <td>${formatCOP(p.costo)}</td>
-      <td class="text-accent fw-bold">${formatCOP(valor)}</td>
+      <td class="text-cyan fw-bold">${formatCOP(valor)}</td>
       <td>${estado}</td>
     </tr>`;
   }).join('');
 }
+
+function exportarInventario() {
+  if (!_dashData) return;
+  const rows = _dashData.productos.map(p => ({
+    referencia: p.referencia,
+    nombre: p.nombre,
+    stock: p.stock,
+    costo_unitario: p.costo,
+    valor_total: p.stock * p.costo
+  }));
+  exportCSV(rows, ['referencia','nombre','stock','costo_unitario','valor_total'], 'inventario');
+  showAlert('Exportación completada');
+}
+
 cargarDashboard();
 </script>
 {% endblock %}
