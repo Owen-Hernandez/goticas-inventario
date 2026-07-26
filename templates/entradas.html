@@ -1,184 +1,57 @@
 {% extends "base.html" %}
 {% block title %}Entradas{% endblock %}
 {% block page_title %}Entradas{% endblock %}
-
+{% block page_sub %}Registro de ingreso de mercancía{% endblock %}
+{% block page_actions %}<button class="btn-exp" onclick="exportCSV(_entradas,['fecha','producto_nombre','referencia','cantidad','costo_unitario','observacion'],'entradas')">↓ CSV</button>{% endblock %}
 {% block content %}
 <div class="grid-form">
-  <div class="card">
-    <div class="card-title">Registrar Entrada</div>
-    <div class="form-col">
-      <div class="form-group">
-        <label>Producto</label>
-        <select id="sel-producto"><option value="">— Seleccionar —</option></select>
-      </div>
-      <div class="form-group">
-        <label>Stock Actual</label>
-        <input type="text" id="stock-actual" readonly placeholder="—" style="color:var(--text3)">
-      </div>
-      <div class="form-group">
-        <label>Cantidad (UND)</label>
-        <input type="number" id="cantidad" min="1" placeholder="0">
-      </div>
-      <div class="form-group">
-        <label>Costo Unitario ($)</label>
-        <input type="number" id="costo-unitario" min="0" placeholder="0">
-        <span class="form-hint">Sin puntos ni comas. Ej: 13500</span>
-      </div>
-      <div class="form-group">
-        <label>Fecha</label>
-        <input type="date" id="fecha">
-      </div>
-      <div class="form-group">
-        <label>Observación</label>
-        <input type="text" id="observacion" placeholder="Ej: Compra proveedor X">
-      </div>
-      <!-- Preview -->
-      <div id="preview-box" style="display:none;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px 12px;">
-        <div class="text-muted text-sm" style="margin-bottom:6px">Vista previa</div>
-        <div class="flex-between">
-          <span class="text-sm text-2">Nuevo stock:</span>
-          <span class="fw-bold text-green" id="preview-stock">—</span>
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Nueva Entrada <span class="panel-title-tag">Registro</span></div></div>
+    <div class="panel-body">
+      <div class="form-col">
+        <div class="form-group"><label>Producto</label><select id="sel-producto"><option value="">— Seleccionar —</option></select></div>
+        <div class="form-group"><label>Stock Actual</label><input type="text" id="stock-actual" readonly placeholder="—" style="color:var(--text3)"></div>
+        <div class="form-group"><label>Cantidad (UND)</label><input type="number" id="cantidad" min="1" placeholder="0"></div>
+        <div class="form-group"><label>Costo Unitario ($)</label><input type="number" id="costo-unitario" min="0" placeholder="0"><span class="form-hint">Sin puntos. Ej: 13500</span></div>
+        <div class="form-group"><label>Fecha</label><input type="date" id="fecha"></div>
+        <div class="form-group"><label>Observación</label><input type="text" id="observacion" placeholder="Ej: Compra proveedor X"></div>
+        <div class="preview-box" id="preview-box">
+          <div class="preview-row"><span class="text-2 text-sm">Nuevo stock:</span><span class="fw-bold text-g" id="prev-stock">—</span></div>
+          <div class="preview-row" style="margin-top:5px"><span class="text-2 text-sm">Valor de entrada:</span><span class="fw-bold text-gold" id="prev-valor">—</span></div>
         </div>
-        <div class="flex-between" style="margin-top:4px">
-          <span class="text-sm text-2">Valor de entrada:</span>
-          <span class="fw-bold text-cyan" id="preview-valor">—</span>
-        </div>
+        <button class="btn btn-primary btn-full" onclick="registrarEntrada()">↓ Registrar Entrada</button>
       </div>
-      <button class="btn btn-primary btn-full" onclick="registrarEntrada()">↓ Registrar Entrada</button>
     </div>
   </div>
-
-  <div class="card">
-    <div class="flex-between" style="margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:0">Historial de Entradas</div>
-      <div style="display:flex;gap:6px">
-        <button class="btn-export" onclick="exportarEntradas()">↓ CSV</button>
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Historial <span class="panel-title-tag">Entradas</span></div></div>
+    <div class="panel-body" style="padding-bottom:0">
+      <div class="filter-bar">
+        <div class="search-wrap"><span class="search-icon">⌕</span><input class="search-input" id="search" placeholder="Buscar producto..." oninput="renderTabla()"></div>
+        <select class="filter-select" id="filter-yr" onchange="renderTabla()"><option value="">Todos</option><option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option></select>
       </div>
-    </div>
-    <div class="filter-bar">
-      <input class="search-input" type="text" id="search" placeholder="Buscar producto...">
-      <select class="filter-select" id="filter-fecha">
-        <option value="">Todas las fechas</option>
-        <option value="2025">2025</option>
-        <option value="2026">2026</option>
-      </select>
     </div>
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Producto</th>
-            <th>Cantidad</th>
-            <th>Costo Unit.</th>
-            <th>Valor Total</th>
-            <th>Observación</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-entradas">
-          <tr><td colspan="6" class="text-muted">Cargando...</td></tr>
-        </tbody>
+        <thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Costo Unit.</th><th>Valor Total</th><th>Observación</th></tr></thead>
+        <tbody id="tabla-entradas"><tr><td colspan="6" class="text-muted">Cargando...</td></tr></tbody>
       </table>
     </div>
   </div>
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script>
-let _entradas = [];
-let _stockActual = 0;
-
-async function cargarProductos() {
-  const res = await fetch('/api/productos');
-  const productos = await res.json();
-  const sel = document.getElementById('sel-producto');
-  sel.innerHTML = '<option value="">— Seleccionar —</option>' +
-    productos.map(p => `<option value="${p.id}" data-stock="${p.stock}" data-costo="${p.costo}">${p.nombre} (${p.referencia})</option>`).join('');
-}
-
-async function cargarEntradas() {
-  const res = await fetch('/api/entradas');
-  _entradas = await res.json();
-  renderTabla();
-}
-
-function renderTabla() {
-  const q = document.getElementById('search').value.toLowerCase();
-  const yr = document.getElementById('filter-fecha').value;
-  const tbody = document.getElementById('tabla-entradas');
-  const filtrado = _entradas.filter(m =>
-    (!q || m.producto_nombre.toLowerCase().includes(q) || m.referencia.toLowerCase().includes(q)) &&
-    (!yr || m.fecha.startsWith(yr))
-  );
-  if (!filtrado.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Sin resultados</td></tr>'; return; }
-  tbody.innerHTML = filtrado.map(m => `<tr>
-    <td><span class="mono">${m.fecha}</span></td>
-    <td>${m.producto_nombre}<div class="td-sub mono">${m.referencia}</div></td>
-    <td><span class="diff-chip pos">+${m.cantidad} UND</span></td>
-    <td>${formatCOP(m.costo_unitario)}</td>
-    <td class="text-cyan fw-bold">${formatCOP(m.cantidad * m.costo_unitario)}</td>
-    <td class="text-2">${m.observacion || '—'}</td>
-  </tr>`).join('');
-}
-
-document.getElementById('search').addEventListener('input', renderTabla);
-document.getElementById('filter-fecha').addEventListener('change', renderTabla);
-
-document.getElementById('sel-producto').addEventListener('change', function() {
-  const opt = this.selectedOptions[0];
-  _stockActual = parseFloat(opt.dataset.stock) || 0;
-  document.getElementById('stock-actual').value = opt.value ? _stockActual + ' UND' : '—';
-  document.getElementById('costo-unitario').value = opt.dataset.costo || '';
-  actualizarPreview();
-});
-
-document.getElementById('cantidad').addEventListener('input', actualizarPreview);
-document.getElementById('costo-unitario').addEventListener('input', actualizarPreview);
-
-function actualizarPreview() {
-  const pid = document.getElementById('sel-producto').value;
-  const cant = parseFloat(document.getElementById('cantidad').value) || 0;
-  const costo = parseFloat(document.getElementById('costo-unitario').value) || 0;
-  const box = document.getElementById('preview-box');
-  if (pid && cant > 0) {
-    box.style.display = 'block';
-    document.getElementById('preview-stock').textContent = (_stockActual + cant) + ' UND';
-    document.getElementById('preview-valor').textContent = formatCOP(cant * costo);
-  } else { box.style.display = 'none'; }
-}
-
-document.getElementById('fecha').value = new Date().toISOString().split('T')[0];
-
-async function registrarEntrada() {
-  const pid = document.getElementById('sel-producto').value;
-  const cantidad = parseFloat(document.getElementById('cantidad').value);
-  const costo = parseFloat(document.getElementById('costo-unitario').value) || 0;
-  const fecha = document.getElementById('fecha').value;
-  const obs = document.getElementById('observacion').value;
-
-  if (!pid || !cantidad || cantidad <= 0) { showAlert('Selecciona un producto y una cantidad válida', 'error'); return; }
-  if (!fecha) { showAlert('Selecciona una fecha', 'error'); return; }
-
-  const res = await fetch('/api/entradas', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ producto_id: pid, cantidad, costo_unitario: costo, fecha, observacion: obs })
-  });
-  const data = await res.json();
-  if (res.ok) {
-    showAlert(data.mensaje);
-    document.getElementById('cantidad').value = '';
-    document.getElementById('observacion').value = '';
-    document.getElementById('preview-box').style.display = 'none';
-    cargarProductos(); cargarEntradas();
-  } else { showAlert(data.error, 'error'); }
-}
-
-function exportarEntradas() {
-  exportCSV(_entradas, ['fecha','producto_nombre','referencia','cantidad','costo_unitario','observacion'], 'entradas');
-  showAlert('Exportación completada');
-}
-
-cargarProductos(); cargarEntradas();
+let _entradas=[];let _stockActual=0;
+async function cargarProductos(){const res=await fetch('/api/productos');const ps=await res.json();const sel=document.getElementById('sel-producto');sel.innerHTML='<option value="">— Seleccionar —</option>'+ps.map(p=>`<option value="${p.id}" data-stock="${p.stock}" data-costo="${p.costo}">${p.nombre} (${p.referencia})</option>`).join('');}
+async function cargarEntradas(){const res=await fetch('/api/entradas');_entradas=await res.json();renderTabla();}
+function renderTabla(){const q=document.getElementById('search').value.toLowerCase();const yr=document.getElementById('filter-yr').value;const f=_entradas.filter(m=>(!q||m.producto_nombre.toLowerCase().includes(q)||m.referencia.toLowerCase().includes(q))&&(!yr||m.fecha.startsWith(yr)));const tb=document.getElementById('tabla-entradas');if(!f.length){tb.innerHTML='<tr><td colspan="6" class="text-muted">Sin resultados</td></tr>';return;}tb.innerHTML=f.map(m=>`<tr><td><span class="mono">${m.fecha}</span></td><td>${m.producto_nombre}<div class="td-sub mono">${m.referencia}</div></td><td><span class="pill pill-pos">+${m.cantidad} UND</span></td><td>${formatCOP(m.costo_unitario)}</td><td class="text-gold fw-bold">${formatCOP(m.cantidad*m.costo_unitario)}</td><td class="text-2">${m.observacion||'—'}</td></tr>`).join('');}
+document.getElementById('sel-producto').addEventListener('change',function(){const o=this.selectedOptions[0];_stockActual=parseFloat(o.dataset.stock)||0;document.getElementById('stock-actual').value=this.value?_stockActual+' UND':'—';document.getElementById('costo-unitario').value=o.dataset.costo||'';actualizarPreview();});
+document.getElementById('cantidad').addEventListener('input',actualizarPreview);
+document.getElementById('costo-unitario').addEventListener('input',actualizarPreview);
+function actualizarPreview(){const pid=document.getElementById('sel-producto').value;const cant=parseFloat(document.getElementById('cantidad').value)||0;const costo=parseFloat(document.getElementById('costo-unitario').value)||0;const box=document.getElementById('preview-box');if(pid&&cant>0){box.style.display='block';document.getElementById('prev-stock').textContent=(_stockActual+cant)+' UND';document.getElementById('prev-valor').textContent=formatCOP(cant*costo);}else box.style.display='none';}
+document.getElementById('fecha').value=new Date().toISOString().split('T')[0];
+async function registrarEntrada(){const pid=document.getElementById('sel-producto').value;const cantidad=parseFloat(document.getElementById('cantidad').value);const costo=parseFloat(document.getElementById('costo-unitario').value)||0;const fecha=document.getElementById('fecha').value;const obs=document.getElementById('observacion').value;if(!pid||!cantidad||cantidad<=0){showAlert('Selecciona un producto y cantidad válida','error');return;}if(!fecha){showAlert('Selecciona una fecha','error');return;}const res=await fetch('/api/entradas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({producto_id:pid,cantidad,costo_unitario:costo,fecha,observacion:obs})});const data=await res.json();if(res.ok){showAlert(data.mensaje);document.getElementById('cantidad').value='';document.getElementById('observacion').value='';document.getElementById('preview-box').style.display='none';cargarProductos();cargarEntradas();}else showAlert(data.error,'error');}
+cargarProductos();cargarEntradas();
 </script>
 {% endblock %}

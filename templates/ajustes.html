@@ -1,174 +1,54 @@
 {% extends "base.html" %}
 {% block title %}Ajustes{% endblock %}
 {% block page_title %}Ajustes{% endblock %}
-
+{% block page_sub %}Corrección de stock por conteo físico{% endblock %}
+{% block page_actions %}<button class="btn-exp" onclick="exportCSV(_ajustes,['fecha','producto_nombre','referencia','cantidad','observacion'],'ajustes')">↓ CSV</button>{% endblock %}
 {% block content %}
 <div class="grid-form">
-  <div class="card">
-    <div class="card-title">Registrar Ajuste</div>
-    <p class="text-2 text-sm" style="margin-bottom:12px;line-height:1.6">Corrige el stock cuando hay diferencias entre el sistema y el conteo físico.</p>
-    <div class="form-col">
-      <div class="form-group">
-        <label>Producto</label>
-        <select id="sel-producto"><option value="">— Seleccionar —</option></select>
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Nuevo Ajuste <span class="panel-title-tag">Corrección</span></div></div>
+    <div class="panel-body">
+      <p class="text-2 text-sm" style="margin-bottom:12px;line-height:1.6">Corrige el stock cuando hay diferencias entre el sistema y el conteo físico en bodega.</p>
+      <div class="form-col">
+        <div class="form-group"><label>Producto</label><select id="sel-producto"><option value="">— Seleccionar —</option></select></div>
+        <div class="form-group"><label>Stock Actual en Sistema</label><input type="text" id="stock-sistema" readonly placeholder="—" style="color:var(--text3)"></div>
+        <div class="form-group"><label>Nuevo Stock Real (UND)</label><input type="number" id="cantidad-nueva" min="0" placeholder="0"></div>
+        <div id="dif-box" style="display:none;padding:10px 12px;background:var(--bg2);border-left:3px solid var(--gold2);border-radius:0 var(--r) var(--r) 0">
+          <div class="text-muted text-sm" style="margin-bottom:5px">Diferencia a aplicar</div>
+          <div id="dif-pill"></div>
+        </div>
+        <div class="form-group"><label>Fecha</label><input type="date" id="fecha"></div>
+        <div class="form-group"><label>Motivo</label><input type="text" id="observacion" placeholder="Ej: Conteo físico, merma, error previo…"></div>
+        <button class="btn btn-primary btn-full" onclick="confirmarAjuste()">⇄ Aplicar Ajuste</button>
       </div>
-      <div class="form-group">
-        <label>Stock Actual en Sistema</label>
-        <input type="text" id="stock-sistema" readonly placeholder="—" style="color:var(--text3)">
-      </div>
-      <div class="form-group">
-        <label>Nuevo Stock Real (UND)</label>
-        <input type="number" id="cantidad-nueva" min="0" placeholder="0">
-      </div>
-      <div id="diferencia-box" style="display:none;padding:12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm)">
-        <div class="text-muted text-sm" style="margin-bottom:6px">Diferencia a aplicar</div>
-        <div id="diferencia-chip"></div>
-      </div>
-      <div class="form-group">
-        <label>Fecha</label>
-        <input type="date" id="fecha">
-      </div>
-      <div class="form-group">
-        <label>Motivo del Ajuste</label>
-        <input type="text" id="observacion" placeholder="Ej: Conteo físico, merma, error previo…">
-      </div>
-      <button class="btn btn-primary btn-full" onclick="confirmarAjuste()">⇄ Aplicar Ajuste</button>
     </div>
   </div>
-
-  <div class="card">
-    <div class="flex-between" style="margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:0">Historial de Ajustes</div>
-      <button class="btn-export" onclick="exportarAjustes()">↓ CSV</button>
-    </div>
-    <div class="filter-bar">
-      <input class="search-input" type="text" id="search" placeholder="Buscar producto...">
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Historial <span class="panel-title-tag">Ajustes</span></div></div>
+    <div class="panel-body" style="padding-bottom:0">
+      <div class="filter-bar"><div class="search-wrap"><span class="search-icon">⌕</span><input class="search-input" id="search" placeholder="Buscar..." oninput="renderTabla()"></div></div>
     </div>
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Producto</th>
-            <th>Diferencia</th>
-            <th>Motivo</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-ajustes">
-          <tr><td colspan="4" class="text-muted">Cargando...</td></tr>
-        </tbody>
+        <thead><tr><th>Fecha</th><th>Producto</th><th>Diferencia</th><th>Motivo</th></tr></thead>
+        <tbody id="tabla-ajustes"><tr><td colspan="4" class="text-muted">Cargando...</td></tr></tbody>
       </table>
     </div>
   </div>
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script>
-let _ajustes = [];
-let _stockActual = 0;
-
-async function cargarProductos() {
-  const res = await fetch('/api/productos');
-  const productos = await res.json();
-  const sel = document.getElementById('sel-producto');
-  sel.innerHTML = '<option value="">— Seleccionar —</option>' +
-    productos.map(p => `<option value="${p.id}" data-stock="${p.stock}">${p.nombre} (${p.referencia})</option>`).join('');
-}
-
-async function cargarAjustes() {
-  const res = await fetch('/api/ajustes');
-  _ajustes = await res.json();
-  renderTabla();
-}
-
-function renderTabla() {
-  const q = document.getElementById('search').value.toLowerCase();
-  const tbody = document.getElementById('tabla-ajustes');
-  const filtrado = _ajustes.filter(m => !q || m.producto_nombre.toLowerCase().includes(q) || m.referencia.toLowerCase().includes(q));
-  if (!filtrado.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-muted">Sin ajustes registrados</td></tr>'; return; }
-  tbody.innerHTML = filtrado.map(m => {
-    const dif = m.cantidad;
-    const chip = dif > 0
-      ? `<span class="diff-chip pos">+${dif} UND</span>`
-      : dif < 0
-      ? `<span class="diff-chip neg">${dif} UND</span>`
-      : `<span class="diff-chip neu">0 UND</span>`;
-    return `<tr>
-      <td><span class="mono">${m.fecha}</span></td>
-      <td>${m.producto_nombre}<div class="td-sub mono">${m.referencia}</div></td>
-      <td>${chip}</td>
-      <td class="text-2">${m.observacion || '—'}</td>
-    </tr>`;
-  }).join('');
-}
-
-document.getElementById('search').addEventListener('input', renderTabla);
-
-document.getElementById('sel-producto').addEventListener('change', function() {
-  const opt = this.selectedOptions[0];
-  _stockActual = parseFloat(opt.dataset.stock) || 0;
-  document.getElementById('stock-sistema').value = opt.value ? _stockActual + ' UND' : '—';
-  calcularDiferencia();
-});
-
-document.getElementById('cantidad-nueva').addEventListener('input', calcularDiferencia);
-
-function calcularDiferencia() {
-  const nueva = parseFloat(document.getElementById('cantidad-nueva').value);
-  const box = document.getElementById('diferencia-box');
-  if (!isNaN(nueva) && document.getElementById('sel-producto').value) {
-    const dif = nueva - _stockActual;
-    box.style.display = 'block';
-    const chip = document.getElementById('diferencia-chip');
-    if (dif > 0) chip.innerHTML = `<span class="diff-chip pos">+${dif} UND</span>`;
-    else if (dif < 0) chip.innerHTML = `<span class="diff-chip neg">${dif} UND</span>`;
-    else chip.innerHTML = `<span class="diff-chip neu">Sin cambio</span>`;
-  } else { box.style.display = 'none'; }
-}
-
-document.getElementById('fecha').value = new Date().toISOString().split('T')[0];
-
-function confirmarAjuste() {
-  const pid = document.getElementById('sel-producto').value;
-  const nueva = parseFloat(document.getElementById('cantidad-nueva').value);
-  const fecha = document.getElementById('fecha').value;
-  const obs = document.getElementById('observacion').value;
-  const nombre = document.getElementById('sel-producto').selectedOptions[0]?.text?.split('(')[0]?.trim() || '';
-
-  if (!pid) { showAlert('Selecciona un producto', 'error'); return; }
-  if (isNaN(nueva) || nueva < 0) { showAlert('Ingresa un stock válido (≥ 0)', 'error'); return; }
-  if (nueva === _stockActual) { showAlert('El nuevo stock es igual al actual', 'error'); return; }
-  if (!obs.trim()) { showAlert('Ingresa el motivo del ajuste', 'error'); return; }
-
-  const dif = nueva - _stockActual;
-  showConfirm(
-    'Confirmar Ajuste',
-    `Ajustar <strong>${nombre}</strong><br>Stock actual: <strong>${_stockActual} UND</strong> → Nuevo stock: <strong>${nueva} UND</strong><br>Diferencia: <strong>${dif > 0 ? '+' : ''}${dif} UND</strong>`,
-    () => registrarAjuste(pid, nueva, fecha, obs)
-  );
-}
-
-async function registrarAjuste(pid, nueva, fecha, obs) {
-  const res = await fetch('/api/ajustes', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ producto_id: pid, cantidad_nueva: nueva, fecha, observacion: obs })
-  });
-  const data = await res.json();
-  if (res.ok) {
-    showAlert(data.mensaje);
-    document.getElementById('cantidad-nueva').value = '';
-    document.getElementById('observacion').value = '';
-    document.getElementById('diferencia-box').style.display = 'none';
-    cargarProductos(); cargarAjustes();
-  } else { showAlert(data.error, 'error'); }
-}
-
-function exportarAjustes() {
-  exportCSV(_ajustes, ['fecha','producto_nombre','referencia','cantidad','observacion'], 'ajustes');
-  showAlert('Exportación completada');
-}
-
-cargarProductos(); cargarAjustes();
+let _ajustes=[];let _stockActual=0;
+async function cargarProductos(){const res=await fetch('/api/productos');const ps=await res.json();const sel=document.getElementById('sel-producto');sel.innerHTML='<option value="">— Seleccionar —</option>'+ps.map(p=>`<option value="${p.id}" data-stock="${p.stock}">${p.nombre} (${p.referencia})</option>`).join('');}
+async function cargarAjustes(){const res=await fetch('/api/ajustes');_ajustes=await res.json();renderTabla();}
+function renderTabla(){const q=document.getElementById('search').value.toLowerCase();const f=_ajustes.filter(m=>!q||m.producto_nombre.toLowerCase().includes(q)||m.referencia.toLowerCase().includes(q));const tb=document.getElementById('tabla-ajustes');if(!f.length){tb.innerHTML='<tr><td colspan="4" class="text-muted">Sin ajustes</td></tr>';return;}tb.innerHTML=f.map(m=>{const dif=m.cantidad;const pill=dif>0?`<span class="pill pill-pos">+${dif} UND</span>`:dif<0?`<span class="pill pill-neg">${dif} UND</span>`:`<span class="pill pill-neu">0 UND</span>`;return `<tr><td><span class="mono">${m.fecha}</span></td><td>${m.producto_nombre}<div class="td-sub mono">${m.referencia}</div></td><td>${pill}</td><td class="text-2">${m.observacion||'—'}</td></tr>`;}).join('');}
+document.getElementById('sel-producto').addEventListener('change',function(){const o=this.selectedOptions[0];_stockActual=parseFloat(o.dataset.stock)||0;document.getElementById('stock-sistema').value=this.value?_stockActual+' UND':'—';calcularDif();});
+document.getElementById('cantidad-nueva').addEventListener('input',calcularDif);
+function calcularDif(){const nueva=parseFloat(document.getElementById('cantidad-nueva').value);const box=document.getElementById('dif-box');if(!isNaN(nueva)&&document.getElementById('sel-producto').value){const dif=nueva-_stockActual;box.style.display='block';const pill=document.getElementById('dif-pill');if(dif>0)pill.innerHTML=`<span class="pill pill-pos">+${dif} UND</span>`;else if(dif<0)pill.innerHTML=`<span class="pill pill-neg">${dif} UND</span>`;else pill.innerHTML=`<span class="pill pill-neu">Sin cambio</span>`;}else box.style.display='none';}
+document.getElementById('fecha').value=new Date().toISOString().split('T')[0];
+function confirmarAjuste(){const pid=document.getElementById('sel-producto').value;const nueva=parseFloat(document.getElementById('cantidad-nueva').value);const fecha=document.getElementById('fecha').value;const obs=document.getElementById('observacion').value;const nombre=document.getElementById('sel-producto').selectedOptions[0]?.text?.split('(')[0]?.trim()||'';if(!pid){showAlert('Selecciona un producto','error');return;}if(isNaN(nueva)||nueva<0){showAlert('Stock válido requerido','error');return;}if(nueva===_stockActual){showAlert('El stock no ha cambiado','error');return;}if(!obs.trim()){showAlert('Ingresa el motivo del ajuste','error');return;}const dif=nueva-_stockActual;showConfirm('Confirmar Ajuste',`Ajustar <strong>${nombre}</strong><br>Actual: <strong>${_stockActual} UND</strong> → Nuevo: <strong>${nueva} UND</strong><br>Diferencia: <strong>${dif>0?'+':''}${dif} UND</strong>`,()=>registrarAjuste(pid,nueva,fecha,obs));}
+async function registrarAjuste(pid,nueva,fecha,obs){const res=await fetch('/api/ajustes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({producto_id:pid,cantidad_nueva:nueva,fecha,observacion:obs})});const data=await res.json();if(res.ok){showAlert(data.mensaje);document.getElementById('cantidad-nueva').value='';document.getElementById('observacion').value='';document.getElementById('dif-box').style.display='none';cargarProductos();cargarAjustes();}else showAlert(data.error,'error');}
+cargarProductos();cargarAjustes();
 </script>
 {% endblock %}

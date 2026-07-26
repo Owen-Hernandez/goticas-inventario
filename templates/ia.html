@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Análisis IA{% endblock %}
+{% block page_title %}Análisis IA{% endblock %}
+{% block page_sub %}Inteligencia aplicada al inventario{% endblock %}
+{% block content %}
+<div style="display:grid;grid-template-columns:1fr 300px;gap:14px">
+
+  <div class="flex-col gap-3">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Tipos de Análisis <span class="panel-title-tag">6 módulos</span></div></div>
+      <div class="panel-body">
+        <p class="text-2 text-sm" style="margin-bottom:14px;line-height:1.6">Selecciona el análisis. La IA leerá el inventario actual y generará recomendaciones específicas basadas en datos reales.</p>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+          <button class="ia-btn" onclick="analizarInventario('general')">
+            <div class="ia-btn-icon">◆</div>
+            <div><div class="ia-btn-title">Resumen General</div><div class="ia-btn-sub">Estado actual del inventario</div></div>
+          </button>
+          <button class="ia-btn" onclick="analizarInventario('rotacion')">
+            <div class="ia-btn-icon">↻</div>
+            <div><div class="ia-btn-title">Rotación de Stock</div><div class="ia-btn-sub">Productos con baja/alta rotación</div></div>
+          </button>
+          <button class="ia-btn" onclick="analizarInventario('reabastecimiento')">
+            <div class="ia-btn-icon">↓</div>
+            <div><div class="ia-btn-title">Reabastecimiento</div><div class="ia-btn-sub">Qué y cuándo comprar</div></div>
+          </button>
+          <button class="ia-btn" onclick="analizarInventario('riesgos')">
+            <div class="ia-btn-icon">⚠</div>
+            <div><div class="ia-btn-title">Riesgos y Alertas</div><div class="ia-btn-sub">Quiebres y sobrestock</div></div>
+          </button>
+          <button class="ia-btn" onclick="analizarInventario('costos')">
+            <div class="ia-btn-icon">◈</div>
+            <div><div class="ia-btn-title">Optimización de Costos</div><div class="ia-btn-sub">Reducir capital inmovilizado</div></div>
+          </button>
+          <button class="ia-btn" onclick="analizarInventario('ventas')">
+            <div class="ia-btn-icon">↑</div>
+            <div><div class="ia-btn-title">Estrategia de Ventas</div><div class="ia-btn-sub">Recomendaciones para vender más</div></div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="loading-panel" style="display:none">
+      <div class="panel-body">
+        <div style="display:flex;align-items:center;gap:14px;padding:6px 0">
+          <div class="ia-spinner"></div>
+          <div>
+            <div class="fw-600" style="font-size:0.85rem">Analizando inventario...</div>
+            <div class="text-muted text-sm">La IA está procesando los datos en tiempo real</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="resultado-panel" style="display:none">
+      <div class="panel-head">
+        <div class="panel-title" id="resultado-titulo">Análisis <span class="panel-title-tag" id="resultado-badge">IA</span></div>
+      </div>
+      <div class="panel-body">
+        <div id="resultado-content" style="font-size:0.82rem;color:var(--text2);line-height:1.8;white-space:pre-wrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex-col gap-3">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Métricas <span class="panel-title-tag">Live</span></div></div>
+      <div class="panel-body" style="padding:0">
+        <div id="metricas-list"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Top Valor <span class="panel-title-tag">Ranking</span></div></div>
+      <div class="panel-body" style="padding:0">
+        <div id="top-list"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="border-left:3px solid var(--gold2)">
+      <div class="panel-head"><div class="panel-title">Consejo IA <span class="panel-title-tag">Automático</span></div></div>
+      <div class="panel-body">
+        <div id="consejo-rapido" class="text-sm text-2" style="line-height:1.7">Cargando...</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+  .ia-btn{
+    display:flex;align-items:center;gap:10px;padding:12px 14px;
+    background:#fff;border:1px solid var(--border);border-radius:var(--r);
+    cursor:pointer;transition:all 0.15s;text-align:left;font-family:'Outfit',sans-serif;
+  }
+  .ia-btn:hover{border-color:var(--gold);background:rgba(139,105,20,0.03);transform:translateY(-1px)}
+  .ia-btn-icon{
+    width:32px;height:32px;border-radius:var(--r);
+    background:var(--bg2);display:flex;align-items:center;justify-content:center;
+    font-size:0.9rem;color:var(--gold);flex-shrink:0;border:1px solid var(--border);
+  }
+  .ia-btn-title{font-size:0.78rem;font-weight:600;color:var(--text)}
+  .ia-btn-sub{font-size:0.63rem;color:var(--text3);margin-top:1px}
+
+  .metrica-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:9px 18px;border-bottom:1px solid var(--border);
+    font-size:0.78rem;
+  }
+  .metrica-row:last-child{border-bottom:none}
+  .metrica-label{color:var(--text2)}
+  .metrica-val{font-family:'DM Mono',monospace;font-weight:500;font-size:0.75rem}
+
+  .top-row{
+    display:flex;align-items:center;gap:10px;
+    padding:9px 18px;border-bottom:1px solid var(--border);
+  }
+  .top-row:last-child{border-bottom:none}
+  .top-rank{
+    width:20px;height:20px;border-radius:50%;
+    background:var(--bg2);color:var(--text3);
+    font-size:0.6rem;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;border:1px solid var(--border);
+  }
+  .top-name{font-size:0.75rem;font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .top-val{font-size:0.72rem;color:var(--gold);font-weight:600;font-family:'DM Mono',monospace}
+
+  .ia-spinner{width:26px;height:26px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TITULOS={general:'Resumen General',rotacion:'Rotación de Stock',reabastecimiento:'Reabastecimiento',riesgos:'Riesgos y Alertas',costos:'Optimización de Costos',ventas:'Estrategia de Ventas'};
+const PROMPTS={
+  general:'Haz un resumen ejecutivo del estado actual del inventario. Incluye valor total, productos críticos y 3 conclusiones clave.',
+  rotacion:'Analiza la rotación basándote en los movimientos. Identifica productos con alta y baja rotación. Da recomendaciones concretas.',
+  reabastecimiento:'Indica qué productos necesitan reabastecimiento urgente, cuándo y en qué cantidades. Prioriza por criticidad.',
+  riesgos:'Identifica riesgos: quiebres de stock, sobrestock, productos con costo $0, y cualquier anomalía detectada.',
+  costos:'Analiza la estructura de costos. Identifica qué productos concentran más valor y cómo optimizar el capital invertido.',
+  ventas:'Sugiere estrategias concretas para aumentar productividad de ventas. Qué productos priorizar y cómo acelerar la rotación.'
+};
+
+async function analizarInventario(tipo){
+  document.getElementById('resultado-panel').style.display='none';
+  document.getElementById('loading-panel').style.display='block';
+  try{
+    const ctx=await fetch('/api/ia/contexto').then(r=>r.json());
+    const sistema=`Eres NEXUS IA, experto en gestión de inventarios. Analiza estos datos reales y responde de forma clara y accionable en español.
+INVENTARIO:
+${ctx.productos.map(p=>`• ${p.nombre} (${p.referencia}): ${p.stock} UND | Costo: ${formatCOP(p.costo)} | Valor: ${formatCOP(p.valor_total)}`).join('\n')}
+VALOR TOTAL: ${formatCOP(ctx.valor_total_inventario)} | UNIDADES: ${ctx.total_unidades} | PRODUCTOS: ${ctx.total_productos}
+MOVIMIENTOS RECIENTES:
+${ctx.movimientos_recientes.map(m=>`• [${m.fecha}] ${m.tipo.toUpperCase()}: ${m.producto_nombre} × ${m.cantidad} UND`).join('\n')}`;
+    const texto=await callIA(sistema,PROMPTS[tipo],1500);
+    document.getElementById('loading-panel').style.display='none';
+    document.getElementById('resultado-panel').style.display='block';
+    document.getElementById('resultado-titulo').innerHTML=`${TITULOS[tipo]} <span class="panel-title-tag">IA</span>`;
+    document.getElementById('resultado-content').textContent=texto;
+  }catch(e){
+    document.getElementById('loading-panel').style.display='none';
+    showAlert('Error al contactar la IA','error');
+  }
+}
+
+async function cargarMetricas(){
+  const res=await fetch('/api/dashboard');const d=await res.json();
+  const sinStock=d.productos.filter(p=>p.stock===0).length;
+  const stockBajo=d.productos.filter(p=>p.stock>0&&p.stock<100).length;
+  document.getElementById('metricas-list').innerHTML=[
+    {label:'Valor inventario',val:formatCOP(d.valor_total_inventario),cls:'text-gold'},
+    {label:'Total unidades',val:Number(d.total_unidades).toLocaleString('es-CO')+' UND',cls:'text-g'},
+    {label:'Sin stock',val:sinStock,cls:sinStock>0?'text-r':'text-g'},
+    {label:'Stock bajo',val:stockBajo,cls:stockBajo>0?'text-a':'text-g'},
+    {label:'Entradas mes',val:Number(d.entradas_mes).toLocaleString('es-CO')+' UND',cls:'text-g'},
+    {label:'Salidas mes',val:Number(d.salidas_mes).toLocaleString('es-CO')+' UND',cls:'text-r'},
+  ].map(m=>`<div class="metrica-row"><span class="metrica-label">${m.label}</span><span class="metrica-val ${m.cls}">${m.val}</span></div>`).join('');
+
+  const top=[...d.productos].sort((a,b)=>(b.stock*b.costo)-(a.stock*a.costo)).slice(0,4);
+  document.getElementById('top-list').innerHTML=top.map((p,i)=>`
+    <div class="top-row">
+      <div class="top-rank">${i+1}</div>
+      <div class="top-name">${p.nombre}</div>
+      <div class="top-val">${formatCOP(p.stock*p.costo)}</div>
+    </div>`).join('');
+
+  try{
+    const ctx=await fetch('/api/ia/contexto').then(r=>r.json());
+    const consejo=await callIA('Eres NEXUS IA. Da UN consejo breve y accionable en máximo 2 oraciones. Sin títulos, directo al punto.',`Inventario: ${ctx.productos.map(p=>`${p.nombre}: ${p.stock} UND`).join(', ')}. Dame un consejo rápido.`,200);
+    document.getElementById('consejo-rapido').textContent=consejo;
+  }catch(e){document.getElementById('consejo-rapido').textContent='Revisa los productos con stock bajo para evitar quiebres de inventario.';}
+}
+
+cargarMetricas();
+</script>
+{% endblock %}

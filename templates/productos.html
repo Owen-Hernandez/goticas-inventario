@@ -1,176 +1,59 @@
 {% extends "base.html" %}
 {% block title %}Productos{% endblock %}
 {% block page_title %}Productos{% endblock %}
-
+{% block page_sub %}Catálogo y gestión de productos{% endblock %}
+{% block page_actions %}<button class="btn-exp" onclick="exportarProductos()">↓ CSV</button>{% endblock %}
 {% block content %}
 <div class="grid-form">
   <div class="flex-col gap-3">
-    <div class="card">
-      <div class="card-title">Crear Producto</div>
-      <div class="form-col">
-        <div class="form-group">
-          <label>Referencia</label>
-          <input type="text" id="referencia" placeholder="Ej: OLE_PAL_BID_001" style="text-transform:uppercase;font-family:'JetBrains Mono',monospace;font-size:0.8rem">
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Crear Producto <span class="panel-title-tag">Nuevo</span></div></div>
+      <div class="panel-body">
+        <div class="form-col">
+          <div class="form-group"><label>Referencia</label><input type="text" id="referencia" placeholder="Ej: OLE_PAL_BID_001" style="text-transform:uppercase;font-family:'DM Mono',monospace;font-size:0.8rem"></div>
+          <div class="form-group"><label>Nombre</label><input type="text" id="nombre" placeholder="Ej: Oleína de Palma Bidón 20 L"></div>
+          <div class="form-group"><label>Costo Unitario ($)</label><input type="number" id="costo" min="0" placeholder="0"><span class="form-hint">Sin puntos. Ej: 45000</span></div>
+          <div class="form-group"><label>Saldo Inicial (UND)</label><input type="number" id="saldo-inicial" min="0" placeholder="0" value="0"></div>
+          <button class="btn btn-primary btn-full" onclick="crearProducto()">▣ Crear Producto</button>
         </div>
-        <div class="form-group">
-          <label>Nombre del Producto</label>
-          <input type="text" id="nombre" placeholder="Ej: Oleína de Palma Bidón 20 L">
-        </div>
-        <div class="form-group">
-          <label>Costo Unitario ($)</label>
-          <input type="number" id="costo" min="0" placeholder="0">
-          <span class="form-hint">Sin puntos. Ej: 45000</span>
-        </div>
-        <div class="form-group">
-          <label>Saldo Inicial (UND)</label>
-          <input type="number" id="saldo-inicial" min="0" placeholder="0" value="0">
-        </div>
-        <button class="btn btn-primary btn-full" onclick="crearProducto()">▣ Crear Producto</button>
       </div>
     </div>
-
-    <div class="card">
-      <div class="card-title">Editar Producto</div>
-      <div class="form-col">
-        <div class="form-group">
-          <label>Seleccionar</label>
-          <select id="sel-editar"><option value="">— Seleccionar —</option></select>
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Editar Producto <span class="panel-title-tag">Modificar</span></div></div>
+      <div class="panel-body">
+        <div class="form-col">
+          <div class="form-group"><label>Seleccionar</label><select id="sel-editar"><option value="">— Seleccionar —</option></select></div>
+          <div class="form-group"><label>Nombre</label><input type="text" id="edit-nombre" placeholder="Nombre del producto"></div>
+          <div class="form-group"><label>Costo ($)</label><input type="number" id="edit-costo" min="0" placeholder="0"><span class="form-hint">Sin puntos. Ej: 87500</span></div>
+          <button class="btn btn-outline btn-full" onclick="editarProducto()">💾 Guardar Cambios</button>
         </div>
-        <div class="form-group">
-          <label>Nombre</label>
-          <input type="text" id="edit-nombre" placeholder="Nombre del producto">
-        </div>
-        <div class="form-group">
-          <label>Costo ($)</label>
-          <input type="number" id="edit-costo" min="0" placeholder="0">
-          <span class="form-hint">Sin puntos. Ej: 87500</span>
-        </div>
-        <button class="btn btn-ghost btn-full" onclick="editarProducto()">💾 Guardar Cambios</button>
       </div>
     </div>
   </div>
-
-  <div class="card">
-    <div class="flex-between" style="margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:0">Productos Registrados</div>
-      <button class="btn-export" onclick="exportarProductos()">↓ CSV</button>
-    </div>
-    <div class="filter-bar">
-      <input class="search-input" type="text" id="search" placeholder="Buscar por nombre o referencia...">
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Catálogo <span class="panel-title-tag">Todos los productos</span></div></div>
+    <div class="panel-body" style="padding-bottom:0">
+      <div class="filter-bar"><div class="search-wrap"><span class="search-icon">⌕</span><input class="search-input" id="search" placeholder="Buscar por nombre o referencia..." oninput="renderTabla()"></div></div>
     </div>
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Referencia</th>
-            <th>Nombre</th>
-            <th>Stock</th>
-            <th>Costo Unit.</th>
-            <th>Valor Total</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-productos">
-          <tr><td colspan="6" class="text-muted">Cargando...</td></tr>
-        </tbody>
+        <thead><tr><th>Referencia</th><th>Nombre</th><th>Stock</th><th>Costo Unit.</th><th>Valor Total</th><th>Estado</th></tr></thead>
+        <tbody id="tabla-productos"><tr><td colspan="6" class="text-muted">Cargando...</td></tr></tbody>
       </table>
     </div>
   </div>
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script>
-let _productos = [];
-
-async function cargarProductos() {
-  const res = await fetch('/api/productos');
-  _productos = await res.json();
-  renderTabla();
-
-  const sel = document.getElementById('sel-editar');
-  sel.innerHTML = '<option value="">— Seleccionar —</option>' +
-    _productos.map(p => `<option value="${p.id}" data-nombre="${p.nombre}" data-costo="${p.costo}">${p.nombre}</option>`).join('');
-}
-
-function renderTabla() {
-  const q = document.getElementById('search').value.toLowerCase();
-  const filtrado = _productos.filter(p => !q || p.nombre.toLowerCase().includes(q) || p.referencia.toLowerCase().includes(q));
-  const tbody = document.getElementById('tabla-productos');
-  if (!filtrado.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Sin resultados</td></tr>'; return; }
-  tbody.innerHTML = filtrado.map(p => {
-    const estado = p.stock === 0
-      ? '<span class="badge badge-red">Sin stock</span>'
-      : p.stock < 100
-      ? '<span class="badge badge-amber">Stock bajo</span>'
-      : '<span class="badge badge-green">OK</span>';
-    return `<tr>
-      <td><span class="mono">${p.referencia}</span></td>
-      <td class="fw-bold">${p.nombre}</td>
-      <td>${Number(p.stock).toLocaleString('es-CO')} UND</td>
-      <td>${formatCOP(p.costo)}</td>
-      <td class="text-cyan fw-bold">${formatCOP(p.stock * p.costo)}</td>
-      <td>${estado}</td>
-    </tr>`;
-  }).join('');
-}
-
-document.getElementById('search').addEventListener('input', renderTabla);
-
-document.getElementById('sel-editar').addEventListener('change', function() {
-  const opt = this.selectedOptions[0];
-  document.getElementById('edit-nombre').value = opt.dataset.nombre || '';
-  document.getElementById('edit-costo').value = opt.dataset.costo || '';
-});
-
-document.getElementById('referencia').addEventListener('input', function() {
-  this.value = this.value.toUpperCase().replace(/\s/g, '_');
-});
-
-async function crearProducto() {
-  const referencia = document.getElementById('referencia').value.trim();
-  const nombre = document.getElementById('nombre').value.trim();
-  const costo = parseFloat(document.getElementById('costo').value) || 0;
-  const saldo_inicial = parseFloat(document.getElementById('saldo-inicial').value) || 0;
-
-  if (!referencia || !nombre) { showAlert('Referencia y nombre son obligatorios', 'error'); return; }
-
-  const res = await fetch('/api/productos', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ referencia, nombre, costo, saldo_inicial })
-  });
-  const data = await res.json();
-  if (res.ok) {
-    showAlert(data.mensaje);
-    ['referencia','nombre','costo'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('saldo-inicial').value = '0';
-    cargarProductos();
-  } else { showAlert(data.error, 'error'); }
-}
-
-async function editarProducto() {
-  const pid = document.getElementById('sel-editar').value;
-  const nombre = document.getElementById('edit-nombre').value.trim();
-  const costo = parseFloat(document.getElementById('edit-costo').value) || 0;
-
-  if (!pid) { showAlert('Selecciona un producto', 'error'); return; }
-  if (!nombre) { showAlert('El nombre no puede estar vacío', 'error'); return; }
-
-  const res = await fetch(`/api/productos/${pid}`, {
-    method: 'PUT', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ nombre, costo })
-  });
-  const data = await res.json();
-  if (res.ok) { showAlert(data.mensaje); cargarProductos(); }
-  else { showAlert(data.error, 'error'); }
-}
-
-function exportarProductos() {
-  const rows = _productos.map(p => ({ referencia: p.referencia, nombre: p.nombre, stock: p.stock, costo: p.costo, valor_total: p.stock * p.costo }));
-  exportCSV(rows, ['referencia','nombre','stock','costo','valor_total'], 'productos');
-  showAlert('Exportación completada');
-}
-
+let _productos=[];
+async function cargarProductos(){const res=await fetch('/api/productos');_productos=await res.json();renderTabla();const sel=document.getElementById('sel-editar');sel.innerHTML='<option value="">— Seleccionar —</option>'+_productos.map(p=>`<option value="${p.id}" data-nombre="${p.nombre}" data-costo="${p.costo}">${p.nombre}</option>`).join('');}
+function renderTabla(){const q=document.getElementById('search').value.toLowerCase();const f=_productos.filter(p=>!q||p.nombre.toLowerCase().includes(q)||p.referencia.toLowerCase().includes(q));const tb=document.getElementById('tabla-productos');if(!f.length){tb.innerHTML='<tr><td colspan="6" class="text-muted">Sin resultados</td></tr>';return;}tb.innerHTML=f.map(p=>{const est=p.stock===0?'<span class="tag tag-err">Sin stock</span>':p.stock<100?'<span class="tag tag-warn">Stock bajo</span>':'<span class="tag tag-ok">OK</span>';return `<tr><td><span class="mono">${p.referencia}</span></td><td class="fw-600">${p.nombre}</td><td>${Number(p.stock).toLocaleString('es-CO')} UND</td><td>${formatCOP(p.costo)}</td><td class="text-gold fw-bold">${formatCOP(p.stock*p.costo)}</td><td>${est}</td></tr>`;}).join('');}
+document.getElementById('sel-editar').addEventListener('change',function(){const o=this.selectedOptions[0];document.getElementById('edit-nombre').value=o.dataset.nombre||'';document.getElementById('edit-costo').value=o.dataset.costo||'';});
+document.getElementById('referencia').addEventListener('input',function(){this.value=this.value.toUpperCase().replace(/\s/g,'_');});
+async function crearProducto(){const referencia=document.getElementById('referencia').value.trim();const nombre=document.getElementById('nombre').value.trim();const costo=parseFloat(document.getElementById('costo').value)||0;const saldo_inicial=parseFloat(document.getElementById('saldo-inicial').value)||0;if(!referencia||!nombre){showAlert('Referencia y nombre son obligatorios','error');return;}const res=await fetch('/api/productos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({referencia,nombre,costo,saldo_inicial})});const data=await res.json();if(res.ok){showAlert(data.mensaje);['referencia','nombre','costo'].forEach(id=>document.getElementById(id).value='');document.getElementById('saldo-inicial').value='0';cargarProductos();}else showAlert(data.error,'error');}
+async function editarProducto(){const pid=document.getElementById('sel-editar').value;const nombre=document.getElementById('edit-nombre').value.trim();const costo=parseFloat(document.getElementById('edit-costo').value)||0;if(!pid){showAlert('Selecciona un producto','error');return;}if(!nombre){showAlert('Nombre requerido','error');return;}const res=await fetch(`/api/productos/${pid}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre,costo})});const data=await res.json();if(res.ok){showAlert(data.mensaje);cargarProductos();}else showAlert(data.error,'error');}
+function exportarProductos(){exportCSV(_productos.map(p=>({referencia:p.referencia,nombre:p.nombre,stock:p.stock,costo:p.costo,valor_total:p.stock*p.costo})),['referencia','nombre','stock','costo','valor_total'],'productos');}
 cargarProductos();
 </script>
 {% endblock %}

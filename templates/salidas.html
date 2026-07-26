@@ -1,188 +1,56 @@
 {% extends "base.html" %}
 {% block title %}Salidas{% endblock %}
 {% block page_title %}Salidas{% endblock %}
-
+{% block page_sub %}Registro de despacho de mercancía{% endblock %}
+{% block page_actions %}<button class="btn-exp" onclick="exportCSV(_salidas,['fecha','producto_nombre','referencia','cantidad','costo_unitario','observacion'],'salidas')">↓ CSV</button>{% endblock %}
 {% block content %}
 <div class="grid-form">
-  <div class="card">
-    <div class="card-title">Registrar Salida</div>
-    <div class="form-col">
-      <div class="form-group">
-        <label>Producto</label>
-        <select id="sel-producto"><option value="">— Seleccionar —</option></select>
-      </div>
-      <div class="form-group">
-        <label>Stock Disponible</label>
-        <input type="text" id="stock-actual" readonly placeholder="—" style="color:var(--text3)">
-      </div>
-      <div class="form-group">
-        <label>Cantidad a Despachar (UND)</label>
-        <input type="number" id="cantidad" min="1" placeholder="0">
-      </div>
-      <div class="form-group">
-        <label>Fecha</label>
-        <input type="date" id="fecha">
-      </div>
-      <div class="form-group">
-        <label>Observación</label>
-        <input type="text" id="observacion" placeholder="Ej: Despacho cliente X">
-      </div>
-      <!-- Preview -->
-      <div id="preview-box" style="display:none;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px 12px;">
-        <div class="text-muted text-sm" style="margin-bottom:6px">Vista previa</div>
-        <div class="flex-between">
-          <span class="text-sm text-2">Stock restante:</span>
-          <span class="fw-bold" id="preview-stock">—</span>
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Nueva Salida <span class="panel-title-tag">Despacho</span></div></div>
+    <div class="panel-body">
+      <div class="form-col">
+        <div class="form-group"><label>Producto</label><select id="sel-producto"><option value="">— Seleccionar —</option></select></div>
+        <div class="form-group"><label>Stock Disponible</label><input type="text" id="stock-actual" readonly placeholder="—" style="color:var(--text3)"></div>
+        <div class="form-group"><label>Cantidad (UND)</label><input type="number" id="cantidad" min="1" placeholder="0"></div>
+        <div class="form-group"><label>Fecha</label><input type="date" id="fecha"></div>
+        <div class="form-group"><label>Observación</label><input type="text" id="observacion" placeholder="Ej: Despacho cliente X"></div>
+        <div class="preview-box" id="preview-box">
+          <div class="preview-row"><span class="text-2 text-sm">Stock restante:</span><span class="fw-bold" id="prev-stock">—</span></div>
+          <div class="preview-row" style="margin-top:5px"><span class="text-2 text-sm">Valor de salida:</span><span class="fw-bold text-gold" id="prev-valor">—</span></div>
         </div>
-        <div class="flex-between" style="margin-top:4px">
-          <span class="text-sm text-2">Valor de salida:</span>
-          <span class="fw-bold text-cyan" id="preview-valor">—</span>
-        </div>
+        <button class="btn btn-danger btn-full" onclick="confirmarSalida()">↑ Registrar Salida</button>
       </div>
-      <button class="btn btn-danger btn-full" onclick="confirmarSalida()">↑ Registrar Salida</button>
     </div>
   </div>
-
-  <div class="card">
-    <div class="flex-between" style="margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:0">Historial de Salidas</div>
-      <button class="btn-export" onclick="exportarSalidas()">↓ CSV</button>
-    </div>
-    <div class="filter-bar">
-      <input class="search-input" type="text" id="search" placeholder="Buscar producto...">
-      <select class="filter-select" id="filter-fecha">
-        <option value="">Todas las fechas</option>
-        <option value="2025">2025</option>
-        <option value="2026">2026</option>
-      </select>
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">Historial <span class="panel-title-tag">Salidas</span></div></div>
+    <div class="panel-body" style="padding-bottom:0">
+      <div class="filter-bar">
+        <div class="search-wrap"><span class="search-icon">⌕</span><input class="search-input" id="search" placeholder="Buscar producto..." oninput="renderTabla()"></div>
+        <select class="filter-select" id="filter-yr" onchange="renderTabla()"><option value="">Todos</option><option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option></select>
+      </div>
     </div>
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Producto</th>
-            <th>Cantidad</th>
-            <th>Costo Unit.</th>
-            <th>Valor Total</th>
-            <th>Observación</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-salidas">
-          <tr><td colspan="6" class="text-muted">Cargando...</td></tr>
-        </tbody>
+        <thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Costo Unit.</th><th>Valor Total</th><th>Observación</th></tr></thead>
+        <tbody id="tabla-salidas"><tr><td colspan="6" class="text-muted">Cargando...</td></tr></tbody>
       </table>
     </div>
   </div>
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script>
-let _salidas = [];
-let _stockActual = 0;
-let _costoActual = 0;
-
-async function cargarProductos() {
-  const res = await fetch('/api/productos');
-  const productos = await res.json();
-  const sel = document.getElementById('sel-producto');
-  sel.innerHTML = '<option value="">— Seleccionar —</option>' +
-    productos.map(p => `<option value="${p.id}" data-stock="${p.stock}" data-costo="${p.costo}">${p.nombre} (${p.referencia}) · ${Number(p.stock).toLocaleString('es-CO')} UND</option>`).join('');
-}
-
-async function cargarSalidas() {
-  const res = await fetch('/api/salidas');
-  _salidas = await res.json();
-  renderTabla();
-}
-
-function renderTabla() {
-  const q = document.getElementById('search').value.toLowerCase();
-  const yr = document.getElementById('filter-fecha').value;
-  const tbody = document.getElementById('tabla-salidas');
-  const filtrado = _salidas.filter(m =>
-    (!q || m.producto_nombre.toLowerCase().includes(q) || m.referencia.toLowerCase().includes(q)) &&
-    (!yr || m.fecha.startsWith(yr))
-  );
-  if (!filtrado.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Sin resultados</td></tr>'; return; }
-  tbody.innerHTML = filtrado.map(m => `<tr>
-    <td><span class="mono">${m.fecha}</span></td>
-    <td>${m.producto_nombre}<div class="td-sub mono">${m.referencia}</div></td>
-    <td><span class="diff-chip neg">-${m.cantidad} UND</span></td>
-    <td>${formatCOP(m.costo_unitario)}</td>
-    <td class="text-cyan fw-bold">${formatCOP(m.cantidad * m.costo_unitario)}</td>
-    <td class="text-2">${m.observacion || '—'}</td>
-  </tr>`).join('');
-}
-
-document.getElementById('search').addEventListener('input', renderTabla);
-document.getElementById('filter-fecha').addEventListener('change', renderTabla);
-
-document.getElementById('sel-producto').addEventListener('change', function() {
-  const opt = this.selectedOptions[0];
-  _stockActual = parseFloat(opt.dataset.stock) || 0;
-  _costoActual = parseFloat(opt.dataset.costo) || 0;
-  document.getElementById('stock-actual').value = opt.value ? _stockActual + ' UND' : '—';
-  actualizarPreview();
-});
-
-document.getElementById('cantidad').addEventListener('input', actualizarPreview);
-
-function actualizarPreview() {
-  const pid = document.getElementById('sel-producto').value;
-  const cant = parseFloat(document.getElementById('cantidad').value) || 0;
-  const box = document.getElementById('preview-box');
-  if (pid && cant > 0) {
-    box.style.display = 'block';
-    const restante = _stockActual - cant;
-    const stockEl = document.getElementById('preview-stock');
-    stockEl.textContent = restante + ' UND';
-    stockEl.className = 'fw-bold ' + (restante < 0 ? 'text-red' : restante < 100 ? 'text-amber' : 'text-green');
-    document.getElementById('preview-valor').textContent = formatCOP(cant * _costoActual);
-  } else { box.style.display = 'none'; }
-}
-
-document.getElementById('fecha').value = new Date().toISOString().split('T')[0];
-
-function confirmarSalida() {
-  const pid = document.getElementById('sel-producto').value;
-  const cantidad = parseFloat(document.getElementById('cantidad').value);
-  const fecha = document.getElementById('fecha').value;
-  const obs = document.getElementById('observacion').value;
-  const nombre = document.getElementById('sel-producto').selectedOptions[0]?.text?.split('(')[0]?.trim() || '';
-
-  if (!pid || !cantidad || cantidad <= 0) { showAlert('Selecciona un producto y una cantidad válida', 'error'); return; }
-  if (!fecha) { showAlert('Selecciona una fecha', 'error'); return; }
-  if (cantidad > _stockActual) { showAlert(`Stock insuficiente. Disponible: ${_stockActual} UND`, 'error'); return; }
-
-  showConfirm(
-    'Confirmar Salida',
-    `¿Registrar salida de <strong>${cantidad} UND</strong> de <strong>${nombre}</strong>?<br>Stock restante: <strong>${_stockActual - cantidad} UND</strong>`,
-    () => registrarSalida(pid, cantidad, fecha, obs)
-  );
-}
-
-async function registrarSalida(pid, cantidad, fecha, obs) {
-  const res = await fetch('/api/salidas', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ producto_id: pid, cantidad, fecha, observacion: obs })
-  });
-  const data = await res.json();
-  if (res.ok) {
-    showAlert(data.mensaje);
-    document.getElementById('cantidad').value = '';
-    document.getElementById('observacion').value = '';
-    document.getElementById('preview-box').style.display = 'none';
-    cargarProductos(); cargarSalidas();
-  } else { showAlert(data.error, 'error'); }
-}
-
-function exportarSalidas() {
-  exportCSV(_salidas, ['fecha','producto_nombre','referencia','cantidad','costo_unitario','observacion'], 'salidas');
-  showAlert('Exportación completada');
-}
-
-cargarProductos(); cargarSalidas();
+let _salidas=[];let _stockActual=0;let _costoActual=0;
+async function cargarProductos(){const res=await fetch('/api/productos');const ps=await res.json();const sel=document.getElementById('sel-producto');sel.innerHTML='<option value="">— Seleccionar —</option>'+ps.map(p=>`<option value="${p.id}" data-stock="${p.stock}" data-costo="${p.costo}">${p.nombre} (${p.referencia}) · ${Number(p.stock).toLocaleString('es-CO')} UND</option>`).join('');}
+async function cargarSalidas(){const res=await fetch('/api/salidas');_salidas=await res.json();renderTabla();}
+function renderTabla(){const q=document.getElementById('search').value.toLowerCase();const yr=document.getElementById('filter-yr').value;const f=_salidas.filter(m=>(!q||m.producto_nombre.toLowerCase().includes(q))&&(!yr||m.fecha.startsWith(yr)));const tb=document.getElementById('tabla-salidas');if(!f.length){tb.innerHTML='<tr><td colspan="6" class="text-muted">Sin resultados</td></tr>';return;}tb.innerHTML=f.map(m=>`<tr><td><span class="mono">${m.fecha}</span></td><td>${m.producto_nombre}<div class="td-sub mono">${m.referencia}</div></td><td><span class="pill pill-neg">-${m.cantidad} UND</span></td><td>${formatCOP(m.costo_unitario)}</td><td class="text-gold fw-bold">${formatCOP(m.cantidad*m.costo_unitario)}</td><td class="text-2">${m.observacion||'—'}</td></tr>`).join('');}
+document.getElementById('sel-producto').addEventListener('change',function(){const o=this.selectedOptions[0];_stockActual=parseFloat(o.dataset.stock)||0;_costoActual=parseFloat(o.dataset.costo)||0;document.getElementById('stock-actual').value=this.value?_stockActual+' UND':'—';actualizarPreview();});
+document.getElementById('cantidad').addEventListener('input',actualizarPreview);
+function actualizarPreview(){const pid=document.getElementById('sel-producto').value;const cant=parseFloat(document.getElementById('cantidad').value)||0;const box=document.getElementById('preview-box');if(pid&&cant>0){box.style.display='block';const rest=_stockActual-cant;const el=document.getElementById('prev-stock');el.textContent=rest+' UND';el.className='fw-bold '+(rest<0?'text-r':rest<100?'text-a':'text-g');document.getElementById('prev-valor').textContent=formatCOP(cant*_costoActual);}else box.style.display='none';}
+document.getElementById('fecha').value=new Date().toISOString().split('T')[0];
+function confirmarSalida(){const pid=document.getElementById('sel-producto').value;const cantidad=parseFloat(document.getElementById('cantidad').value);const fecha=document.getElementById('fecha').value;const obs=document.getElementById('observacion').value;const nombre=document.getElementById('sel-producto').selectedOptions[0]?.text?.split('(')[0]?.trim()||'';if(!pid||!cantidad||cantidad<=0){showAlert('Selecciona un producto y cantidad válida','error');return;}if(!fecha){showAlert('Selecciona una fecha','error');return;}if(cantidad>_stockActual){showAlert(`Stock insuficiente. Disponible: ${_stockActual} UND`,'error');return;}showConfirm('Confirmar Salida',`Salida de <strong>${cantidad} UND</strong> de <strong>${nombre}</strong><br>Stock restante: <strong>${_stockActual-cantidad} UND</strong>`,()=>registrarSalida(pid,cantidad,fecha,obs));}
+async function registrarSalida(pid,cantidad,fecha,obs){const res=await fetch('/api/salidas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({producto_id:pid,cantidad,fecha,observacion:obs})});const data=await res.json();if(res.ok){showAlert(data.mensaje);document.getElementById('cantidad').value='';document.getElementById('observacion').value='';document.getElementById('preview-box').style.display='none';cargarProductos();cargarSalidas();}else showAlert(data.error,'error');}
+cargarProductos();cargarSalidas();
 </script>
 {% endblock %}
